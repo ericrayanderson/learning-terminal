@@ -36,7 +36,7 @@ function playWrong() {
 function playSuccess() {
     const t = audioCtx.currentTime;
     [523, 659, 784, 1047].forEach((freq, i) => {
-        playTone(freq, t + i * 0.1, 0.15);
+        playTone(freq, t + 0.15 + i * 0.1, 0.15);
     });
 }
 // --- End Audio ---
@@ -238,12 +238,10 @@ function startSpelling() {
 
 function handleLetterClick(letter) {
     if (letter === currentWord[spellingIndex]) {
+        playCorrect();
         if (spellingIndex + 1 === currentWord.length) {
-            triggerSuccess(() => {
-                startSpelling();
-            });
+            triggerSuccess(() => startSpelling());
         } else {
-            playCorrect();
             spellingIndex++;
             render();
         }
@@ -266,9 +264,8 @@ function startCounting() {
 
 function handleCountClick(num) {
     if (num === countItems) {
-        triggerSuccess(() => {
-            startCounting();
-        });
+        playCorrect();
+        triggerSuccess(() => startCounting());
     } else {
         playWrong();
     }
@@ -292,9 +289,8 @@ function startAddition() {
 
 function handleAdditionClick(num) {
     if (num === mathProblem.result) {
-        triggerSuccess(() => {
-            startAddition();
-        });
+        playCorrect();
+        triggerSuccess(() => startAddition());
     } else {
         playWrong();
     }
