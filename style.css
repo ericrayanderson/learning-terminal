@@ -138,6 +138,13 @@ button:active {
   margin: 40px 0;
 }
 
+.word-emoji {
+  font-size: 100px;
+  text-shadow: none;
+  margin: 10px 0;
+  line-height: 1.1;
+}
+
 .back-btn {
   margin-top: 50px;
   font-size: 18px;
