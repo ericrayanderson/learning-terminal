@@ -4,6 +4,8 @@ const WORD_EMOJI = {
     CUP: '☕', HAT: '🎩', PIG: '🐷', BED: '🛏️'
 };
 let mode = 'HOME';
+let pendingGame = '';
+let turnsLeft = 0;
 
 // --- Audio ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -39,6 +41,19 @@ function playSuccess() {
         playTone(freq, t + 0.15 + i * 0.1, 0.15);
     });
 }
+
+function playTheEnd() {
+    const t = audioCtx.currentTime;
+    [784, 659, 523, 392, 330].forEach((freq, i) => {
+        playTone(freq, t + i * 0.25, 0.3, 'square', 0.18);
+    });
+    setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance('The End');
+        utterance.rate = 0.7;
+        utterance.pitch = 0.8;
+        window.speechSynthesis.speak(utterance);
+    }, 1500);
+}
 // --- End Audio ---
 
 let currentWord = '';
@@ -53,40 +68,69 @@ const successOverlay = document.getElementById('success-overlay');
 
 function render() {
     appContainer.innerHTML = '';
-    
+
     if (mode === 'HOME') {
         const menu = document.createElement('div');
         menu.className = 'menu';
-        
+
         const h1 = document.createElement('h1');
         h1.innerText = 'LEARNING TERMINAL';
         menu.appendChild(h1);
-        
+
         const line = document.createElement('div');
         line.className = 'line';
         line.innerText = '══════════════════════════════';
         menu.appendChild(line);
-        
+
         const btnSpelling = document.createElement('button');
         btnSpelling.innerText = '[ SPELLING ]';
-        btnSpelling.onclick = startSpelling;
+        btnSpelling.onclick = () => selectGame('SPELLING');
         menu.appendChild(btnSpelling);
-        
+
         const btnCounting = document.createElement('button');
         btnCounting.innerText = '[ COUNTING ]';
-        btnCounting.onclick = startCounting;
+        btnCounting.onclick = () => selectGame('COUNTING');
         menu.appendChild(btnCounting);
-        
+
         const btnAddition = document.createElement('button');
         btnAddition.innerText = '[ ADDITION ]';
-        btnAddition.onclick = startAddition;
+        btnAddition.onclick = () => selectGame('ADDITION');
         menu.appendChild(btnAddition);
-        
+
         appContainer.appendChild(menu);
+
+    } else if (mode === 'TURN_SELECT') {
+        const menu = document.createElement('div');
+        menu.className = 'menu';
+
+        const h1 = document.createElement('h1');
+        h1.innerText = 'HOW MANY TURNS?';
+        menu.appendChild(h1);
+
+        const line = document.createElement('div');
+        line.className = 'line';
+        line.innerText = '══════════════════════════════';
+        menu.appendChild(line);
+
+        [10, 20].forEach(n => {
+            const btn = document.createElement('button');
+            btn.innerText = `[ ${n} TURNS ]`;
+            btn.onclick = () => startGameWithTurns(n);
+            menu.appendChild(btn);
+        });
+
+        const backBtn = document.createElement('button');
+        backBtn.className = 'back-btn';
+        backBtn.innerText = 'RETURN TO MENU';
+        backBtn.onclick = () => { mode = 'HOME'; render(); };
+        menu.appendChild(backBtn);
+
+        appContainer.appendChild(menu);
+
     } else if (mode === 'SPELLING') {
         const screen = document.createElement('div');
         screen.className = 'game-screen';
-        
+
         const box = document.createElement('div');
         box.className = 'box-border';
         const h2 = document.createElement('h2');
@@ -117,7 +161,7 @@ function render() {
         });
         box.appendChild(h1);
         screen.appendChild(box);
-        
+
         const controls = document.createElement('div');
         controls.className = 'controls';
         spellingOptions.forEach(l => {
@@ -128,24 +172,25 @@ function render() {
             controls.appendChild(btn);
         });
         screen.appendChild(controls);
-        
+
         const backBtn = document.createElement('button');
         backBtn.className = 'back-btn';
         backBtn.innerText = 'RETURN TO MENU';
         backBtn.onclick = () => { mode = 'HOME'; render(); };
         screen.appendChild(backBtn);
-        
+
         appContainer.appendChild(screen);
+
     } else if (mode === 'COUNTING') {
         const screen = document.createElement('div');
         screen.className = 'game-screen';
-        
+
         const box = document.createElement('div');
         box.className = 'box-border';
         const h2 = document.createElement('h2');
         h2.innerText = 'HOW MANY?';
         box.appendChild(h2);
-        
+
         const items = document.createElement('div');
         items.className = 'items-display';
         for (let i = 0; i < countItems; i++) {
@@ -156,7 +201,7 @@ function render() {
         }
         box.appendChild(items);
         screen.appendChild(box);
-        
+
         const controls = document.createElement('div');
         controls.className = 'controls';
         currentOptions.forEach(opt => {
@@ -166,30 +211,31 @@ function render() {
             controls.appendChild(btn);
         });
         screen.appendChild(controls);
-        
+
         const backBtn = document.createElement('button');
         backBtn.className = 'back-btn';
         backBtn.innerText = 'RETURN TO MENU';
         backBtn.onclick = () => { mode = 'HOME'; render(); };
         screen.appendChild(backBtn);
-        
+
         appContainer.appendChild(screen);
+
     } else if (mode === 'ADDITION') {
         const screen = document.createElement('div');
         screen.className = 'game-screen';
-        
+
         const box = document.createElement('div');
         box.className = 'box-border';
         const h2 = document.createElement('h2');
         h2.innerText = 'SOLVE THE PROBLEM';
         box.appendChild(h2);
-        
+
         const h1 = document.createElement('h1');
         h1.className = 'display-text';
         h1.innerText = `${mathProblem.a} + ${mathProblem.b} = ?`;
         box.appendChild(h1);
         screen.appendChild(box);
-        
+
         const controls = document.createElement('div');
         controls.className = 'controls';
         currentOptions.forEach(opt => {
@@ -199,13 +245,34 @@ function render() {
             controls.appendChild(btn);
         });
         screen.appendChild(controls);
-        
+
         const backBtn = document.createElement('button');
         backBtn.className = 'back-btn';
         backBtn.innerText = 'RETURN TO MENU';
         backBtn.onclick = () => { mode = 'HOME'; render(); };
         screen.appendChild(backBtn);
-        
+
+        appContainer.appendChild(screen);
+
+    } else if (mode === 'THE_END') {
+        const screen = document.createElement('div');
+        screen.className = 'game-screen';
+
+        const box = document.createElement('div');
+        box.className = 'box-border';
+
+        const h1 = document.createElement('h1');
+        h1.className = 'display-text';
+        h1.innerText = 'THE END';
+        box.appendChild(h1);
+
+        screen.appendChild(box);
+
+        const backBtn = document.createElement('button');
+        backBtn.innerText = 'RETURN TO MENU';
+        backBtn.onclick = () => { mode = 'HOME'; render(); };
+        screen.appendChild(backBtn);
+
         appContainer.appendChild(screen);
     }
 }
@@ -217,6 +284,32 @@ function triggerSuccess(nextFn) {
         successOverlay.classList.add('hidden');
         nextFn();
     }, 1000);
+}
+
+function selectGame(game) {
+    pendingGame = game;
+    mode = 'TURN_SELECT';
+    render();
+}
+
+function startGameWithTurns(turns) {
+    turnsLeft = turns;
+    if (pendingGame === 'SPELLING') startSpelling();
+    else if (pendingGame === 'COUNTING') startCounting();
+    else if (pendingGame === 'ADDITION') startAddition();
+}
+
+function nextRound() {
+    turnsLeft--;
+    if (turnsLeft <= 0) {
+        mode = 'THE_END';
+        render();
+        playTheEnd();
+        return;
+    }
+    if (pendingGame === 'SPELLING') startSpelling();
+    else if (pendingGame === 'COUNTING') startCounting();
+    else if (pendingGame === 'ADDITION') startAddition();
 }
 
 function generateSpellingOptions(word) {
@@ -240,7 +333,7 @@ function handleLetterClick(letter) {
     if (letter === currentWord[spellingIndex]) {
         playCorrect();
         if (spellingIndex + 1 === currentWord.length) {
-            triggerSuccess(() => startSpelling());
+            triggerSuccess(() => nextRound());
         } else {
             spellingIndex++;
             render();
@@ -251,10 +344,10 @@ function handleLetterClick(letter) {
 }
 
 function startCounting() {
-    countItems = Math.floor(Math.random() * 5) + 1;
+    countItems = Math.floor(Math.random() * 9) + 1;
     let opts = [countItems];
     while (opts.length < 3) {
-        let r = Math.floor(Math.random() * 6) + 1;
+        let r = Math.floor(Math.random() * 9) + 1;
         if (!opts.includes(r)) opts.push(r);
     }
     currentOptions = opts.sort((a, b) => a - b);
@@ -265,7 +358,7 @@ function startCounting() {
 function handleCountClick(num) {
     if (num === countItems) {
         playCorrect();
-        triggerSuccess(() => startCounting());
+        triggerSuccess(() => nextRound());
     } else {
         playWrong();
     }
@@ -276,7 +369,7 @@ function startAddition() {
     const b = Math.floor(Math.random() * 3) + 1;
     const res = a + b;
     mathProblem = { a, b, result: res };
-    
+
     let opts = [res];
     while (opts.length < 3) {
         let r = Math.floor(Math.random() * 6) + 1;
@@ -290,7 +383,7 @@ function startAddition() {
 function handleAdditionClick(num) {
     if (num === mathProblem.result) {
         playCorrect();
-        triggerSuccess(() => startAddition());
+        triggerSuccess(() => nextRound());
     } else {
         playWrong();
     }

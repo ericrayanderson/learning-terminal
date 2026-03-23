@@ -132,6 +132,7 @@ button:active {
 
 .items-display {
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
   justify-content: center;
   font-size: 60px;
