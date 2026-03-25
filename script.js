@@ -13,6 +13,15 @@ let audioCtx = null;
 function getAudioCtx() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Play a silent buffer immediately to unlock audio on iOS
+        const buf = audioCtx.createBuffer(1, 1, 22050);
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtx.destination);
+        src.start(0);
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
     }
     return audioCtx;
 }
@@ -30,34 +39,30 @@ function playTone(ctx, freq, startTime, duration, type = 'square', gain = 0.15) 
     osc.stop(startTime + duration);
 }
 
-async function playCorrect() {
+function playCorrect() {
     const ctx = getAudioCtx();
-    await ctx.resume();
     const t = ctx.currentTime;
     playTone(ctx, 440, t, 0.1);
     playTone(ctx, 660, t + 0.08, 0.12);
 }
 
-async function playWrong() {
+function playWrong() {
     const ctx = getAudioCtx();
-    await ctx.resume();
     const t = ctx.currentTime;
     playTone(ctx, 220, t, 0.15, 'sawtooth', 0.1);
     playTone(ctx, 180, t + 0.1, 0.15, 'sawtooth', 0.1);
 }
 
-async function playSuccess() {
+function playSuccess() {
     const ctx = getAudioCtx();
-    await ctx.resume();
     const t = ctx.currentTime;
     [523, 659, 784, 1047].forEach((freq, i) => {
         playTone(ctx, freq, t + 0.15 + i * 0.1, 0.15);
     });
 }
 
-async function playTheEnd() {
+function playTheEnd() {
     const ctx = getAudioCtx();
-    await ctx.resume();
     const t = ctx.currentTime;
     [784, 659, 523, 392, 330].forEach((freq, i) => {
         playTone(ctx, freq, t + i * 0.25, 0.3, 'square', 0.18);
