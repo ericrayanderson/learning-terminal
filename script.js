@@ -8,13 +8,20 @@ let pendingGame = '';
 let turnsLeft = 0;
 
 // --- Audio ---
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let audioCtx = null;
 
-function playTone(freq, startTime, duration, type = 'square', gain = 0.15) {
-    const osc = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
+function getAudioCtx() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioCtx;
+}
+
+function playTone(ctx, freq, startTime, duration, type = 'square', gain = 0.15) {
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
     osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
+    gainNode.connect(ctx.destination);
     osc.type = type;
     osc.frequency.setValueAtTime(freq, startTime);
     gainNode.gain.setValueAtTime(gain, startTime);
@@ -24,32 +31,36 @@ function playTone(freq, startTime, duration, type = 'square', gain = 0.15) {
 }
 
 async function playCorrect() {
-    await audioCtx.resume();
-    const t = audioCtx.currentTime;
-    playTone(440, t, 0.1);
-    playTone(660, t + 0.08, 0.12);
+    const ctx = getAudioCtx();
+    await ctx.resume();
+    const t = ctx.currentTime;
+    playTone(ctx, 440, t, 0.1);
+    playTone(ctx, 660, t + 0.08, 0.12);
 }
 
 async function playWrong() {
-    await audioCtx.resume();
-    const t = audioCtx.currentTime;
-    playTone(220, t, 0.15, 'sawtooth', 0.1);
-    playTone(180, t + 0.1, 0.15, 'sawtooth', 0.1);
+    const ctx = getAudioCtx();
+    await ctx.resume();
+    const t = ctx.currentTime;
+    playTone(ctx, 220, t, 0.15, 'sawtooth', 0.1);
+    playTone(ctx, 180, t + 0.1, 0.15, 'sawtooth', 0.1);
 }
 
 async function playSuccess() {
-    await audioCtx.resume();
-    const t = audioCtx.currentTime;
+    const ctx = getAudioCtx();
+    await ctx.resume();
+    const t = ctx.currentTime;
     [523, 659, 784, 1047].forEach((freq, i) => {
-        playTone(freq, t + 0.15 + i * 0.1, 0.15);
+        playTone(ctx, freq, t + 0.15 + i * 0.1, 0.15);
     });
 }
 
 async function playTheEnd() {
-    await audioCtx.resume();
-    const t = audioCtx.currentTime;
+    const ctx = getAudioCtx();
+    await ctx.resume();
+    const t = ctx.currentTime;
     [784, 659, 523, 392, 330].forEach((freq, i) => {
-        playTone(freq, t + i * 0.25, 0.3, 'square', 0.18);
+        playTone(ctx, freq, t + i * 0.25, 0.3, 'square', 0.18);
     });
     setTimeout(() => {
         const utterance = new SpeechSynthesisUtterance('The End');
