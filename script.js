@@ -119,34 +119,6 @@ function render() {
 
         appContainer.appendChild(menu);
 
-    } else if (mode === 'TURN_SELECT') {
-        const menu = document.createElement('div');
-        menu.className = 'menu';
-
-        const h1 = document.createElement('h1');
-        h1.innerText = 'HOW MANY TURNS?';
-        menu.appendChild(h1);
-
-        const line = document.createElement('div');
-        line.className = 'line';
-        line.innerText = '══════════════════════════════';
-        menu.appendChild(line);
-
-        [10, 20].forEach(n => {
-            const btn = document.createElement('button');
-            btn.innerText = `[ ${n} TURNS ]`;
-            btn.onclick = () => startGameWithTurns(n);
-            menu.appendChild(btn);
-        });
-
-        const backBtn = document.createElement('button');
-        backBtn.className = 'back-btn';
-        backBtn.innerText = 'RETURN TO MENU';
-        backBtn.onclick = () => { mode = 'HOME'; render(); };
-        menu.appendChild(backBtn);
-
-        appContainer.appendChild(menu);
-
     } else if (mode === 'SPELLING') {
         const screen = document.createElement('div');
         screen.className = 'game-screen';
@@ -341,8 +313,7 @@ function triggerSuccess(nextFn) {
 
 function selectGame(game) {
     pendingGame = game;
-    mode = 'TURN_SELECT';
-    render();
+    startGameWithTurns(10);
 }
 
 function startGameWithTurns(turns) {
