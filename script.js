@@ -23,26 +23,30 @@ function playTone(freq, startTime, duration, type = 'square', gain = 0.15) {
     osc.stop(startTime + duration);
 }
 
-function playCorrect() {
+async function playCorrect() {
+    await audioCtx.resume();
     const t = audioCtx.currentTime;
     playTone(440, t, 0.1);
     playTone(660, t + 0.08, 0.12);
 }
 
-function playWrong() {
+async function playWrong() {
+    await audioCtx.resume();
     const t = audioCtx.currentTime;
     playTone(220, t, 0.15, 'sawtooth', 0.1);
     playTone(180, t + 0.1, 0.15, 'sawtooth', 0.1);
 }
 
-function playSuccess() {
+async function playSuccess() {
+    await audioCtx.resume();
     const t = audioCtx.currentTime;
     [523, 659, 784, 1047].forEach((freq, i) => {
         playTone(freq, t + 0.15 + i * 0.1, 0.15);
     });
 }
 
-function playTheEnd() {
+async function playTheEnd() {
+    await audioCtx.resume();
     const t = audioCtx.currentTime;
     [784, 659, 523, 392, 330].forEach((freq, i) => {
         playTone(freq, t + i * 0.25, 0.3, 'square', 0.18);
