@@ -82,6 +82,7 @@ let countItems = 0;
 let mathProblem = { a: 0, b: 0, result: 0 };
 let currentOptions = [];
 let spellingOptions = [];
+let coolingDown = false;
 
 const appContainer = document.getElementById('app-container');
 const successOverlay = document.getElementById('success-overlay');
@@ -302,6 +303,24 @@ function render() {
     }
 }
 
+function handleWrong() {
+    playWrong();
+    coolingDown = true;
+    const buttons = appContainer.querySelectorAll('.controls button');
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add('cooldown');
+    });
+    setTimeout(() => {
+        coolingDown = false;
+        const btns = appContainer.querySelectorAll('.controls button');
+        btns.forEach(btn => {
+            btn.disabled = false;
+            btn.classList.remove('cooldown');
+        });
+    }, 1500);
+}
+
 function triggerSuccess(nextFn) {
     playSuccess();
     successOverlay.classList.remove('hidden');
@@ -354,6 +373,7 @@ function startSpelling() {
 }
 
 function handleLetterClick(letter) {
+    if (coolingDown) return;
     if (letter === currentWord[spellingIndex]) {
         playCorrect();
         if (spellingIndex + 1 === currentWord.length) {
@@ -363,7 +383,7 @@ function handleLetterClick(letter) {
             render();
         }
     } else {
-        playWrong();
+        handleWrong();
     }
 }
 
@@ -380,11 +400,12 @@ function startCounting() {
 }
 
 function handleCountClick(num) {
+    if (coolingDown) return;
     if (num === countItems) {
         playCorrect();
         triggerSuccess(() => nextRound());
     } else {
-        playWrong();
+        handleWrong();
     }
 }
 
@@ -405,11 +426,12 @@ function startAddition() {
 }
 
 function handleAdditionClick(num) {
+    if (coolingDown) return;
     if (num === mathProblem.result) {
         playCorrect();
         triggerSuccess(() => nextRound());
     } else {
-        playWrong();
+        handleWrong();
     }
 }
 
