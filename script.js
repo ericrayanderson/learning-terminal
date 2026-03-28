@@ -306,6 +306,8 @@ function render() {
 function handleWrong() {
     playWrong();
     coolingDown = true;
+    const root = document.getElementById('root');
+    root.classList.add('wrong-screen');
     const buttons = appContainer.querySelectorAll('.controls button');
     buttons.forEach(btn => {
         btn.disabled = true;
@@ -313,12 +315,13 @@ function handleWrong() {
     });
     setTimeout(() => {
         coolingDown = false;
+        root.classList.remove('wrong-screen');
         const btns = appContainer.querySelectorAll('.controls button');
         btns.forEach(btn => {
             btn.disabled = false;
             btn.classList.remove('cooldown');
         });
-    }, 1500);
+    }, 5000);
 }
 
 function triggerSuccess(nextFn) {
