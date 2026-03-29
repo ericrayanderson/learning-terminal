@@ -126,7 +126,7 @@ function render() {
 
         const games = [
             { name: 'COUNTING', key: 'COUNTING' },
-            { name: 'BIGGER/SMALLER', key: 'BIGGER_SMALLER' },
+            { name: 'MOST DOTS', key: 'BIGGER_SMALLER' },
             { name: 'SHAPES', key: 'SHAPES' },
             { name: 'ADDITION', key: 'ADDITION' },
             { name: 'SPELLING', key: 'SPELLING' }
