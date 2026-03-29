@@ -313,9 +313,6 @@ function render() {
 
         const box = document.createElement('div');
         box.className = 'box-border';
-        const h2 = document.createElement('h2');
-        h2.innerText = 'WHAT SHAPE IS THIS?';
-        box.appendChild(h2);
 
         const shapeDisplay = document.createElement('div');
         shapeDisplay.className = 'shape-display';
