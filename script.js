@@ -72,6 +72,8 @@ let audioCtx = null;
 let currentAudio = null;
 const audioCache = new Map();
 let preferredVoice = null;
+let speechSeq = 0;
+let speechTimers = [];
 
 function unlockAudio() {
     if (!audioCtx) {
@@ -127,13 +129,20 @@ function stopSound() {
         currentAudio.currentTime = 0;
         currentAudio = null;
     }
+    // Cancel any staged count-out-loud timers so they can't overlap
+    speechSeq++;
+    speechTimers.forEach(function (id) { clearTimeout(id); });
+    speechTimers = [];
     if (window.speechSynthesis) window.speechSynthesis.cancel();
 }
 
 function speak(text, opts) {
     opts = opts || {};
     if (!window.speechSynthesis || !text) return;
-    window.speechSynthesis.cancel();
+    // Only cancel if this is a fresh "interrupt" speak (default true)
+    if (opts.cancel !== false) {
+        window.speechSynthesis.cancel();
+    }
     const u = new SpeechSynthesisUtterance(text);
     u.rate = opts.rate != null ? opts.rate : 0.9;
     u.pitch = opts.pitch != null ? opts.pitch : 1.05;
@@ -141,6 +150,12 @@ function speak(text, opts) {
     const voice = pickVoice();
     if (voice) u.voice = voice;
     window.speechSynthesis.speak(u);
+}
+
+function scheduleSpeech(fn, delay) {
+    const id = setTimeout(fn, delay);
+    speechTimers.push(id);
+    return id;
 }
 
 function playLetter(entry) {
@@ -480,6 +495,7 @@ function startCounting() {
 }
 
 function nextCountingRound() {
+    stopSound();
     // 1–8 dots — counting practice
     countItems = Math.floor(Math.random() * 8) + 1;
     const opts = new Set([countItems]);
@@ -529,26 +545,60 @@ function renderCounting() {
 }
 
 function countOutLoud(n) {
+    // Bump sequence so any older chain dies
     stopSound();
     unlockAudio();
-    // Speak each number in sequence, then the total once more
+    const mySeq = speechSeq;
     var i = 1;
-    function step() {
-        if (i > n) {
-            setTimeout(function () {
-                speak(NUMBER_WORDS[n] || String(n), { rate: 0.85 });
-            }, 200);
+
+    function sayWord(word, done) {
+        if (mySeq !== speechSeq) return;
+        if (!window.speechSynthesis) {
+            done();
             return;
         }
-        speak(NUMBER_WORDS[i] || String(i), { rate: 0.9 });
-        // schedule next — speech length varies; fixed gap works ok for kids
-        var delay = 550;
-        setTimeout(function () {
+        const u = new SpeechSynthesisUtterance(word);
+        u.rate = 0.88;
+        u.pitch = 1.08;
+        u.lang = 'en-US';
+        const voice = pickVoice();
+        if (voice) u.voice = voice;
+        u.onend = function () {
+            if (mySeq !== speechSeq) return;
+            // small pause between numbers
+            scheduleSpeech(done, 120);
+        };
+        u.onerror = function () {
+            if (mySeq !== speechSeq) return;
+            scheduleSpeech(done, 120);
+        };
+        window.speechSynthesis.speak(u);
+    }
+
+    function step() {
+        if (mySeq !== speechSeq) return;
+        if (i > n) {
+            // Finish with the total once: "five"
+            scheduleSpeech(function () {
+                if (mySeq !== speechSeq) return;
+                sayWord(NUMBER_WORDS[n] || String(n), function () {});
+            }, 180);
+            return;
+        }
+        sayWord(NUMBER_WORDS[i] || String(i), function () {
             i++;
             step();
-        }, delay);
+        });
     }
     step();
+}
+
+/** After a wrong answer: clearly say the correct count once */
+function sayCorrectCount(n) {
+    stopSound();
+    unlockAudio();
+    const word = NUMBER_WORDS[n] || String(n);
+    speak('there are ' + word, { rate: 0.88 });
 }
 
 function onCountPick(n) {
@@ -568,8 +618,10 @@ function onCountPick(n) {
             nextCountingRound();
         });
     } else {
+        // Don't re-run a full count-out (timers used to stack and sound random).
+        // Say the correct total clearly, once.
         wrongCooldown(function () {
-            countOutLoud(countItems);
+            sayCorrectCount(countItems);
         });
     }
 }
