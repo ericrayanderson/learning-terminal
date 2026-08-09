@@ -1,16 +1,14 @@
-# Letter Sounds
+# Letter Sounds · Arcade
 
 https://ericrayanderson.github.io/learning-terminal/
 
-Ultra-simple phonics for little kids.
+80s arcade-styled phonics for little kids. Ultra-simple:
 
-## How it works
+1. Giant letter + picture  
+2. **HEAR** — pure human letter sound  
+3. **NEXT** — next letter  
+4. Occasional quiz with two giant letters  
 
-1. Big letter + picture  
-2. **Hear** — pure letter sound (human recording)  
-3. **Next** — next letter  
-4. Sometimes a quick quiz: two giant letters to pick from  
+No menus. Progress saves in the browser.
 
-No menus. Progress is saved in the browser.
-
-Letter sounds from [Buzzphonics](https://github.com/hellodeborahuk/buzzphonics) (MIT). See `vendor-credits/`.
+Letter sounds from [Buzzphonics](https://github.com/hellodeborahuk/buzzphonics) (MIT).
