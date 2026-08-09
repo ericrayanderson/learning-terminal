@@ -1,10 +1,10 @@
 /**
- * Learning Terminal — Letters (phonics) & Numbers
- * Neon look, ultra-simple: home picks a path, then big taps.
+ * Learning Terminal — Letters (phonics) & Numbers practice
+ * Neon look, big simple choices.
  * Letter sounds: Buzzphonics (MIT)
  */
 
-const STORAGE_KEY = 'lt-home-v1';
+const STORAGE_KEY = 'lt-home-v2';
 const WRONG_MS = 1600;
 
 const LETTERS = [
@@ -29,40 +29,49 @@ const LETTERS = [
     { letter: 'L', file: 'l', word: 'lion', emoji: '🦁' }
 ];
 
-const NUMBER_WORDS = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-const MAX_NUM = 10;
+const NUMBER_WORDS = {
+    1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
+    6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'
+};
 
-// track: 'home' | 'letters' | 'numbers'
-// mode: 'SHOW' | 'QUIZ' | 'DONE' (for tracks)
+// track: home | letters | numbers-menu | counting | addition | compare
+// mode: SHOW | QUIZ | PLAY | DONE
 let track = 'home';
 let mode = 'SHOW';
-let index = 0;           // letter index OR number value 1..10 for numbers (as index 0..9 for n-1)
+let index = 0;
 let quizAnswer = null;
 let quizOptions = [];
 let quizKind = 'SOUND';
 let coolingDown = false;
 let sinceQuiz = 0;
-let numValue = 1;        // current number 1-10
+let turnsLeft = 0;
+let turnsTotal = 8;
+
+// math/count state
+let countItems = 0;
+let mathA = 0;
+let mathB = 0;
+let compareLeft = 0;
+let compareRight = 0;
 
 function load() {
     try {
         const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        if (typeof p.letterIndex === 'number') index = Math.min(Math.max(0, p.letterIndex), LETTERS.length - 1);
-        if (typeof p.numValue === 'number') numValue = Math.min(Math.max(1, p.numValue), MAX_NUM);
+        if (typeof p.letterIndex === 'number') {
+            index = Math.min(Math.max(0, p.letterIndex), LETTERS.length - 1);
+        }
     } catch (e) { /* ignore */ }
 }
 
 function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        letterIndex: index,
-        numValue: numValue
-    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ letterIndex: index }));
 }
 
 // ——— Audio ———
 let audioCtx = null;
 let currentAudio = null;
 const audioCache = new Map();
+let preferredVoice = null;
 
 function unlockAudio() {
     if (!audioCtx) {
@@ -77,6 +86,41 @@ function unlockAudio() {
     return audioCtx;
 }
 
+function pickVoice() {
+    if (!window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices() || [];
+    if (!voices.length) return preferredVoice;
+    const prefer = [
+        /google us english/i,
+        /google uk english female/i,
+        /microsoft (aria|jenny|sara)/i,
+        /samantha/i,
+        /karen/i,
+        /moira/i,
+        /female/i,
+        /en-us/i,
+        /en-gb/i
+    ];
+    for (var i = 0; i < prefer.length; i++) {
+        var v = voices.find(function (x) {
+            return prefer[i].test(x.name) || prefer[i].test(x.lang);
+        });
+        if (v) {
+            preferredVoice = v;
+            return v;
+        }
+    }
+    preferredVoice = voices.find(function (v) {
+        return v.lang && v.lang.toLowerCase().indexOf('en') === 0;
+    }) || voices[0];
+    return preferredVoice;
+}
+
+if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = function () { pickVoice(); };
+    pickVoice();
+}
+
 function stopSound() {
     if (currentAudio) {
         currentAudio.pause();
@@ -84,6 +128,19 @@ function stopSound() {
         currentAudio = null;
     }
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+}
+
+function speak(text, opts) {
+    opts = opts || {};
+    if (!window.speechSynthesis || !text) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = opts.rate != null ? opts.rate : 0.9;
+    u.pitch = opts.pitch != null ? opts.pitch : 1.05;
+    u.lang = 'en-US';
+    const voice = pickVoice();
+    if (voice) u.voice = voice;
+    window.speechSynthesis.speak(u);
 }
 
 function playLetter(entry) {
@@ -103,7 +160,7 @@ function playLetter(entry) {
 
 function tone(freq, when, dur, type, gain) {
     type = type || 'sine';
-    gain = gain == null ? 0.12 : gain;
+    gain = gain == null ? 0.1 : gain;
     const ctx = unlockAudio();
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -130,13 +187,19 @@ function playNo() {
     tone(220, t + 0.1, 0.18, 'triangle', 0.06);
 }
 
-/** Count beeps for the number — clear for kids, no robot voice needed */
-function playNumber(n) {
+/** Speak the number word; soft count beeps after for counting practice */
+function playNumberVoice(n, withBeeps) {
     stopSound();
-    const ctx = unlockAudio();
-    const t0 = ctx.currentTime + 0.05;
-    for (let i = 0; i < n; i++) {
-        tone(520 + i * 20, t0 + i * 0.28, 0.16, 'square', 0.1);
+    unlockAudio();
+    const word = NUMBER_WORDS[n] || String(n);
+    speak(word, { rate: 0.85, pitch: 1.08 });
+    if (withBeeps) {
+        // light beeps after the word so kids can count along
+        const ctx = unlockAudio();
+        const t0 = ctx.currentTime + 0.55;
+        for (var i = 0; i < n; i++) {
+            tone(500 + i * 15, t0 + i * 0.22, 0.12, 'sine', 0.07);
+        }
     }
 }
 
@@ -155,9 +218,9 @@ function el(tag, cls, text) {
 
 function shuffle(a) {
     const x = a.slice();
-    for (let i = x.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const tmp = x[i];
+    for (var i = x.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = x[i];
         x[i] = x[j];
         x[j] = tmp;
     }
@@ -171,16 +234,25 @@ function dotsHtml(n) {
     return html;
 }
 
-function homeLink() {
-    const b = el('button', 'home-link', 'Home');
+function homeLink(label, onClick) {
+    const b = el('button', 'home-link', label || 'Home');
     b.type = 'button';
-    b.onclick = function () {
-        stopSound();
-        coolingDown = false;
-        track = 'home';
-        render();
-    };
+    b.onclick = onClick || goHome;
     return b;
+}
+
+function goHome() {
+    stopSound();
+    coolingDown = false;
+    track = 'home';
+    render();
+}
+
+function goNumbersMenu() {
+    stopSound();
+    coolingDown = false;
+    track = 'numbers-menu';
+    render();
 }
 
 // ——— Render ———
@@ -188,7 +260,10 @@ function render() {
     app.innerHTML = '';
     if (track === 'home') return renderHome();
     if (track === 'letters') return renderLetters();
-    if (track === 'numbers') return renderNumbers();
+    if (track === 'numbers-menu') return renderNumbersMenu();
+    if (track === 'counting') return renderCounting();
+    if (track === 'addition') return renderAddition();
+    if (track === 'compare') return renderCompare();
 }
 
 function renderHome() {
@@ -211,10 +286,7 @@ function renderHome() {
     numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span>';
     numbers.onclick = function () {
         unlockAudio();
-        track = 'numbers';
-        mode = 'SHOW';
-        sinceQuiz = 0;
-        showNumber(true);
+        goNumbersMenu();
     };
 
     const col = el('div', 'big-actions');
@@ -224,7 +296,47 @@ function renderHome() {
     app.appendChild(screen);
 }
 
-// ——— Letters (phonics) ———
+function renderNumbersMenu() {
+    const screen = el('div', 'simple-screen');
+    screen.appendChild(el('p', 'hint', 'Numbers'));
+
+    const col = el('div', 'big-actions');
+
+    const counting = el('button', 'big-btn primary home-choice');
+    counting.type = 'button';
+    counting.innerHTML = '<span class="home-icon">●●●</span><span>Counting</span>';
+    counting.onclick = function () {
+        unlockAudio();
+        startCounting();
+    };
+
+    const addition = el('button', 'big-btn secondary home-choice');
+    addition.type = 'button';
+    addition.innerHTML = '<span class="home-icon">+</span><span>Adding</span>';
+    addition.onclick = function () {
+        unlockAudio();
+        startAddition();
+    };
+
+    const compare = el('button', 'big-btn secondary home-choice');
+    compare.type = 'button';
+    compare.innerHTML = '<span class="home-icon">◇</span><span>Which more?</span>';
+    compare.onclick = function () {
+        unlockAudio();
+        startCompare();
+    };
+
+    col.appendChild(counting);
+    col.appendChild(addition);
+    // Only two big buttons preferred — put compare as third? User said counting, addition, etc.
+    // Keep three options for numbers practice but stacked big.
+    col.appendChild(compare);
+    screen.appendChild(col);
+    screen.appendChild(homeLink('Home', goHome));
+    app.appendChild(screen);
+}
+
+// ——— Letters ———
 function renderLetters() {
     const screen = el('div', 'simple-screen');
 
@@ -249,21 +361,19 @@ function renderLetters() {
         const answer = LETTERS.find(function (L) { return L.letter === quizAnswer; });
         const prompt = el('button', 'letter-stage');
         prompt.type = 'button';
-        prompt.setAttribute('aria-label', 'Hear again');
         if (quizKind === 'PIC') {
             prompt.innerHTML =
                 '<span class="stage-emoji">' + answer.emoji + '</span>' +
                 '<span class="hint">Which letter?</span>';
         } else {
             prompt.innerHTML =
-                '<span class="stage-speaker" aria-hidden="true">🔊</span>' +
+                '<span class="stage-speaker">🔊</span>' +
                 '<span class="hint">Which letter?</span>';
         }
         prompt.onclick = function () {
             if (!coolingDown) playLetter(answer);
         };
         screen.appendChild(prompt);
-
         const row = el('div', 'big-actions row');
         quizOptions.forEach(function (L) {
             const btn = el('button', 'big-btn letter-choice', L);
@@ -277,11 +387,9 @@ function renderLetters() {
         return;
     }
 
-    // SHOW
     const item = LETTERS[index];
     const stage = el('button', 'letter-stage pulse');
     stage.type = 'button';
-    stage.setAttribute('aria-label', 'Hear the sound');
     stage.innerHTML =
         '<span class="giant-letter">' + item.letter + '</span>' +
         '<span class="stage-emoji">' + item.emoji + '</span>' +
@@ -292,7 +400,6 @@ function renderLetters() {
         stage.classList.remove('pulse');
     };
     screen.appendChild(stage);
-
     const next = el('button', 'big-btn primary', 'Next');
     next.type = 'button';
     next.onclick = onLetterNext;
@@ -304,9 +411,7 @@ function renderLetters() {
 function showLetter(autoPlay) {
     mode = 'SHOW';
     render();
-    if (autoPlay) {
-        setTimeout(function () { playLetter(LETTERS[index]); }, 280);
-    }
+    if (autoPlay) setTimeout(function () { playLetter(LETTERS[index]); }, 280);
 }
 
 function onLetterNext() {
@@ -366,139 +471,285 @@ function onLetterQuiz(letter) {
     }
 }
 
-// ——— Numbers ———
-function renderNumbers() {
+// ——— Counting practice ———
+function startCounting() {
+    track = 'counting';
+    turnsTotal = 8;
+    turnsLeft = 8;
+    nextCountingRound();
+}
+
+function nextCountingRound() {
+    // 1–8 dots — counting practice
+    countItems = Math.floor(Math.random() * 8) + 1;
+    const opts = new Set([countItems]);
+    while (opts.size < 2) {
+        opts.add(Math.floor(Math.random() * 8) + 1);
+    }
+    quizOptions = shuffle(Array.from(opts));
+    quizAnswer = countItems;
+    mode = 'PLAY';
+    render();
+    // Auto-speak nothing yet; tap stage to count aloud
+    setTimeout(function () {
+        // gently say "how many?"
+        speak('how many?', { rate: 0.95 });
+    }, 250);
+}
+
+function renderCounting() {
     const screen = el('div', 'simple-screen');
 
     if (mode === 'DONE') {
-        screen.appendChild(el('div', 'giant-emoji', '⭐'));
-        screen.appendChild(el('p', 'hint', 'You finished numbers!'));
-        const again = el('button', 'big-btn primary', 'Again');
-        again.type = 'button';
-        again.onclick = function () {
-            numValue = 1;
-            sinceQuiz = 0;
-            save();
-            showNumber(true);
-        };
-        screen.appendChild(again);
-        screen.appendChild(homeLink());
-        app.appendChild(screen);
-        return;
+        return renderNumDone(screen, 'Counting', startCounting);
     }
 
-    if (mode === 'QUIZ') {
-        const n = quizAnswer;
-        const prompt = el('button', 'letter-stage');
-        prompt.type = 'button';
-        prompt.setAttribute('aria-label', 'Hear again');
-        prompt.innerHTML =
-            dotsHtml(n) +
-            '<span class="hint">How many?</span>';
-        prompt.onclick = function () {
-            if (!coolingDown) playNumber(n);
-        };
-        screen.appendChild(prompt);
-
-        const row = el('div', 'big-actions row');
-        quizOptions.forEach(function (opt) {
-            const btn = el('button', 'big-btn letter-choice', String(opt));
-            btn.type = 'button';
-            btn.onclick = function () { onNumberQuiz(opt); };
-            row.appendChild(btn);
-        });
-        screen.appendChild(row);
-        screen.appendChild(homeLink());
-        app.appendChild(screen);
-        return;
-    }
-
-    // SHOW number
-    const n = numValue;
-    const stage = el('button', 'letter-stage pulse');
+    const stage = el('button', 'letter-stage');
     stage.type = 'button';
-    stage.setAttribute('aria-label', 'Hear the number');
     stage.innerHTML =
-        '<span class="giant-letter">' + n + '</span>' +
-        dotsHtml(n) +
-        '<span class="hint">Tap to hear</span>';
+        dotsHtml(countItems) +
+        '<span class="hint">How many? Tap to count</span>';
     stage.onclick = function () {
-        unlockAudio();
-        playNumber(n);
-        stage.classList.remove('pulse');
+        if (coolingDown) return;
+        // Count out loud: "one… two… three…" then total
+        countOutLoud(countItems);
     };
     screen.appendChild(stage);
 
-    const next = el('button', 'big-btn primary', 'Next');
-    next.type = 'button';
-    next.onclick = onNumberNext;
-    screen.appendChild(next);
-    screen.appendChild(homeLink());
+    const row = el('div', 'big-actions row');
+    quizOptions.forEach(function (opt) {
+        const btn = el('button', 'big-btn letter-choice', String(opt));
+        btn.type = 'button';
+        btn.onclick = function () { onCountPick(opt); };
+        row.appendChild(btn);
+    });
+    screen.appendChild(row);
+    screen.appendChild(homeLink('Back', goNumbersMenu));
     app.appendChild(screen);
 }
 
-function showNumber(autoPlay) {
-    mode = 'SHOW';
-    render();
-    if (autoPlay) {
-        setTimeout(function () { playNumber(numValue); }, 280);
-    }
-}
-
-function onNumberNext() {
-    unlockAudio();
-    sinceQuiz++;
-    if (numValue >= 2 && sinceQuiz >= 2) {
-        startNumberQuiz();
-        return;
-    }
-    advanceNumber();
-}
-
-function advanceNumber() {
+function countOutLoud(n) {
     stopSound();
-    if (numValue >= MAX_NUM) {
-        mode = 'DONE';
-        render();
-        playYes();
-        return;
+    unlockAudio();
+    // Speak each number in sequence, then the total once more
+    var i = 1;
+    function step() {
+        if (i > n) {
+            setTimeout(function () {
+                speak(NUMBER_WORDS[n] || String(n), { rate: 0.85 });
+            }, 200);
+            return;
+        }
+        speak(NUMBER_WORDS[i] || String(i), { rate: 0.9 });
+        // schedule next — speech length varies; fixed gap works ok for kids
+        var delay = 550;
+        setTimeout(function () {
+            i++;
+            step();
+        }, delay);
     }
-    numValue++;
-    save();
-    showNumber(true);
+    step();
 }
 
-function startNumberQuiz() {
-    sinceQuiz = 0;
-    const n = numValue;
-    quizAnswer = n;
-    var wrong = n;
-    var guard = 0;
-    while (wrong === n && guard < 20) {
-        // nearby numbers for age 4
-        const delta = Math.random() < 0.5 ? -1 : 1;
-        wrong = Math.min(MAX_NUM, Math.max(1, n + delta));
-        if (wrong === n) wrong = n >= MAX_NUM ? n - 1 : n + 1;
-        guard++;
-    }
-    quizOptions = shuffle([n, wrong]);
-    mode = 'QUIZ';
-    render();
-    setTimeout(function () { playNumber(n); }, 300);
-}
-
-function onNumberQuiz(pick) {
+function onCountPick(n) {
     if (coolingDown) return;
-    if (pick === quizAnswer) {
+    if (n === quizAnswer) {
         stopSound();
         playYes();
-        flashYes(function () { advanceNumber(); });
+        speak(NUMBER_WORDS[n] || String(n), { rate: 0.9 });
+        flashYes(function () {
+            turnsLeft--;
+            if (turnsLeft <= 0) {
+                mode = 'DONE';
+                render();
+                playYes();
+                return;
+            }
+            nextCountingRound();
+        });
     } else {
-        wrongCooldown(function () { playNumber(quizAnswer); });
+        wrongCooldown(function () {
+            countOutLoud(countItems);
+        });
     }
 }
 
-// ——— Feedback helpers ———
+// ——— Addition ———
+function startAddition() {
+    track = 'addition';
+    turnsTotal = 8;
+    turnsLeft = 8;
+    nextAdditionRound();
+}
+
+function nextAdditionRound() {
+    // Small addends for age 4: 1–4 + 1–4, sum ≤ 8
+    mathA = Math.floor(Math.random() * 4) + 1;
+    mathB = Math.floor(Math.random() * 4) + 1;
+    while (mathA + mathB > 8) {
+        mathA = Math.floor(Math.random() * 4) + 1;
+        mathB = Math.floor(Math.random() * 4) + 1;
+    }
+    quizAnswer = mathA + mathB;
+    const opts = new Set([quizAnswer]);
+    while (opts.size < 2) {
+        var r = Math.floor(Math.random() * 8) + 1;
+        opts.add(r);
+    }
+    quizOptions = shuffle(Array.from(opts));
+    mode = 'PLAY';
+    render();
+    setTimeout(function () {
+        speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
+    }, 280);
+}
+
+function renderAddition() {
+    const screen = el('div', 'simple-screen');
+    if (mode === 'DONE') {
+        return renderNumDone(screen, 'Adding', startAddition);
+    }
+
+    const stage = el('button', 'letter-stage');
+    stage.type = 'button';
+    stage.innerHTML =
+        '<div class="math-row">' +
+        '<div class="math-group">' + dotsHtml(mathA) + '<span class="math-num">' + mathA + '</span></div>' +
+        '<span class="math-op">+</span>' +
+        '<div class="math-group">' + dotsHtml(mathB) + '<span class="math-num">' + mathB + '</span></div>' +
+        '</div>' +
+        '<span class="hint">Tap to hear</span>';
+    stage.onclick = function () {
+        if (coolingDown) return;
+        speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
+    };
+    screen.appendChild(stage);
+
+    const row = el('div', 'big-actions row');
+    quizOptions.forEach(function (opt) {
+        const btn = el('button', 'big-btn letter-choice', String(opt));
+        btn.type = 'button';
+        btn.onclick = function () { onAddPick(opt); };
+        row.appendChild(btn);
+    });
+    screen.appendChild(row);
+    screen.appendChild(homeLink('Back', goNumbersMenu));
+    app.appendChild(screen);
+}
+
+function onAddPick(n) {
+    if (coolingDown) return;
+    if (n === quizAnswer) {
+        stopSound();
+        playYes();
+        speak(NUMBER_WORDS[n] || String(n), { rate: 0.9 });
+        flashYes(function () {
+            turnsLeft--;
+            if (turnsLeft <= 0) {
+                mode = 'DONE';
+                render();
+                playYes();
+                return;
+            }
+            nextAdditionRound();
+        });
+    } else {
+        wrongCooldown(function () {
+            speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
+        });
+    }
+}
+
+// ——— Which has more? ———
+function startCompare() {
+    track = 'compare';
+    turnsTotal = 8;
+    turnsLeft = 8;
+    nextCompareRound();
+}
+
+function nextCompareRound() {
+    do {
+        compareLeft = Math.floor(Math.random() * 8) + 1;
+        compareRight = Math.floor(Math.random() * 8) + 1;
+    } while (compareLeft === compareRight);
+    quizAnswer = compareLeft > compareRight ? 'LEFT' : 'RIGHT';
+    mode = 'PLAY';
+    render();
+    setTimeout(function () {
+        speak('which has more?', { rate: 0.95 });
+    }, 250);
+}
+
+function renderCompare() {
+    const screen = el('div', 'simple-screen');
+    if (mode === 'DONE') {
+        return renderNumDone(screen, 'Which more?', startCompare);
+    }
+
+    const stage = el('div', 'letter-stage compare-stage');
+    stage.innerHTML =
+        '<div class="compare-row">' +
+        '<div class="compare-side">' + dotsHtml(compareLeft) + '</div>' +
+        '<div class="compare-vs">or</div>' +
+        '<div class="compare-side">' + dotsHtml(compareRight) + '</div>' +
+        '</div>' +
+        '<span class="hint">Which has more?</span>';
+    screen.appendChild(stage);
+
+    const row = el('div', 'big-actions row');
+    const left = el('button', 'big-btn letter-choice wide-label', 'Left');
+    left.type = 'button';
+    left.onclick = function () { onComparePick('LEFT'); };
+    const right = el('button', 'big-btn letter-choice wide-label', 'Right');
+    right.type = 'button';
+    right.onclick = function () { onComparePick('RIGHT'); };
+    row.appendChild(left);
+    row.appendChild(right);
+    screen.appendChild(row);
+    screen.appendChild(homeLink('Back', goNumbersMenu));
+    app.appendChild(screen);
+}
+
+function onComparePick(side) {
+    if (coolingDown) return;
+    if (side === quizAnswer) {
+        stopSound();
+        playYes();
+        var n = side === 'LEFT' ? compareLeft : compareRight;
+        speak(NUMBER_WORDS[n] || String(n), { rate: 0.9 });
+        flashYes(function () {
+            turnsLeft--;
+            if (turnsLeft <= 0) {
+                mode = 'DONE';
+                render();
+                playYes();
+                return;
+            }
+            nextCompareRound();
+        });
+    } else {
+        wrongCooldown(function () {
+            speak('which has more?', { rate: 0.95 });
+        });
+    }
+}
+
+function renderNumDone(screen, title, againFn) {
+    screen.appendChild(el('div', 'giant-emoji', '⭐'));
+    screen.appendChild(el('p', 'hint', 'Great job!'));
+    const again = el('button', 'big-btn primary', 'Again');
+    again.type = 'button';
+    again.onclick = againFn;
+    screen.appendChild(again);
+    const back = el('button', 'big-btn secondary', 'Numbers');
+    back.type = 'button';
+    back.onclick = goNumbersMenu;
+    screen.appendChild(back);
+    app.appendChild(screen);
+}
+
+// ——— Feedback ———
 function flashYes(nextFn) {
     yesOverlay.classList.remove('hidden');
     setTimeout(function () {
@@ -535,7 +786,6 @@ function wrongCooldown(after) {
     }, WRONG_MS);
 }
 
-// ——— Boot ———
 function boot() {
     load();
     track = 'home';
