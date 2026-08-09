@@ -149,9 +149,9 @@ function render() {
 
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
-        screen.appendChild(el('h1', 'screen-title', 'All done!'));
+        screen.appendChild(el('h1', 'screen-title', 'YOU WIN!'));
         const row = el('div', 'big-actions');
-        const again = el('button', 'big-btn primary', 'Again');
+        const again = el('button', 'big-btn primary', 'PLAY');
         again.type = 'button';
         again.onclick = function () {
             index = 0;
@@ -161,7 +161,7 @@ function render() {
             render();
             setTimeout(function () { playLetter(LETTERS[0]); }, 250);
         };
-        const hear = el('button', 'big-btn secondary', 'Hear S');
+        const hear = el('button', 'big-btn secondary', 'START');
         hear.type = 'button';
         hear.onclick = function () {
             index = 0;
@@ -205,17 +205,18 @@ function render() {
 
     // SHOW
     const item = LETTERS[index];
+    screen.appendChild(el('p', 'screen-title', 'PLAYER 1'));
     screen.appendChild(el('div', 'giant-letter', item.letter));
     screen.appendChild(el('div', 'giant-emoji', item.emoji));
 
     const row = el('div', 'big-actions');
-    const hearBtn = el('button', 'big-btn primary', 'Hear');
+    const hearBtn = el('button', 'big-btn primary', 'HEAR');
     hearBtn.type = 'button';
     hearBtn.onclick = function () {
         unlockAudio();
         playLetter(item);
     };
-    const nextBtn = el('button', 'big-btn secondary', 'Next');
+    const nextBtn = el('button', 'big-btn secondary', 'NEXT');
     nextBtn.type = 'button';
     nextBtn.onclick = onNext;
     row.appendChild(hearBtn);

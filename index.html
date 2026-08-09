@@ -3,28 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Letter Sounds</title>
+    <title>LETTER SOUNDS · ARCADE</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
     <div id="root">
+        <div class="crt-frame" aria-hidden="true">
+            <div class="scanlines"></div>
+            <div class="crt-glow"></div>
+        </div>
         <div id="app-container" class="container"></div>
 
         <div id="success-overlay" class="feedback-overlay success-overlay hidden" role="status">
             <div class="feedback-card success-card">
-                <div class="feedback-emoji" aria-hidden="true">⭐</div>
-                <h1>Yes!</h1>
+                <div class="feedback-emoji" aria-hidden="true">★</div>
+                <h1>1 UP!</h1>
             </div>
         </div>
 
         <div id="wrong-overlay" class="feedback-overlay wrong-overlay hidden" role="status">
             <div class="feedback-card wrong-card">
-                <div class="feedback-emoji" aria-hidden="true">👂</div>
-                <h1>Listen</h1>
+                <div class="feedback-emoji" aria-hidden="true">♪</div>
+                <h1>TRY!</h1>
                 <div class="wrong-progress-track">
                     <div id="wrong-progress-bar" class="wrong-progress-bar"></div>
                 </div>
