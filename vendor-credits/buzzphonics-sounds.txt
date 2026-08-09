@@ -1,0 +1,8 @@
+Letter sound recordings (*.m4a in /sounds)
+Source: https://github.com/hellodeborahuk/buzzphonics
+Author: Debbie Dann
+License: MIT License
+Copyright (c) 2022 Debbie Dann
+
+The MIT license text is included with the Buzzphonics project.
+These pure phoneme recordings are used for early phonics teaching.
