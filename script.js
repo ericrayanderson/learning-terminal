@@ -1,10 +1,10 @@
 /**
- * Letter Sounds — ultra-simple phonics for ~age 4
- * One letter at a time. Always just two big buttons.
+ * Letter Sounds — simple phonics for ~age 4
+ * 80s neon look, kid-simple interaction.
  * Sounds: Buzzphonics (MIT) https://github.com/hellodeborahuk/buzzphonics
  */
 
-const STORAGE_KEY = 'lt-simple-v2';
+const STORAGE_KEY = 'lt-simple-v3';
 
 const LETTERS = [
     { letter: 'S', file: 's', word: 'sun', emoji: '☀️' },
@@ -28,9 +28,9 @@ const LETTERS = [
     { letter: 'L', file: 'l', word: 'lion', emoji: '🦁' }
 ];
 
-const WRONG_MS = 1800;
+const WRONG_MS = 1600;
 
-let mode = 'SHOW';
+let mode = 'SHOW'; // SHOW | QUIZ | DONE
 let index = 0;
 let quizAnswer = '';
 let quizOptions = [];
@@ -149,42 +149,36 @@ function render() {
 
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
-        screen.appendChild(el('h1', 'screen-title', 'YOU WIN!'));
-        const row = el('div', 'big-actions');
-        const again = el('button', 'big-btn primary', 'PLAY');
+        screen.appendChild(el('p', 'hint', 'You finished!'));
+        const again = el('button', 'big-btn primary', 'Again');
         again.type = 'button';
         again.onclick = function () {
             index = 0;
             sinceQuiz = 0;
             mode = 'SHOW';
             save();
-            render();
-            setTimeout(function () { playLetter(LETTERS[0]); }, 250);
+            showLetter(true);
         };
-        const hear = el('button', 'big-btn secondary', 'START');
-        hear.type = 'button';
-        hear.onclick = function () {
-            index = 0;
-            mode = 'SHOW';
-            save();
-            render();
-            setTimeout(function () { playLetter(LETTERS[0]); }, 200);
-        };
-        row.appendChild(again);
-        row.appendChild(hear);
-        screen.appendChild(row);
+        screen.appendChild(again);
         app.appendChild(screen);
         return;
     }
 
     if (mode === 'QUIZ') {
         const answer = LETTERS.find(function (L) { return L.letter === quizAnswer; });
-        const prompt = el('button', 'prompt-big');
+
+        // Whole prompt is "tap to hear again" — auto-played on enter
+        const prompt = el('button', 'letter-stage');
         prompt.type = 'button';
+        prompt.setAttribute('aria-label', 'Hear the sound again');
         if (quizKind === 'PIC') {
-            prompt.innerHTML = '<span class="prompt-big-emoji">' + answer.emoji + '</span>';
+            prompt.innerHTML =
+                '<span class="stage-emoji">' + answer.emoji + '</span>' +
+                '<span class="hint">Which letter?</span>';
         } else {
-            prompt.innerHTML = '<span class="prompt-big-icon">🔊</span>';
+            prompt.innerHTML =
+                '<span class="stage-speaker" aria-hidden="true">🔊</span>' +
+                '<span class="hint">Which letter?</span>';
         }
         prompt.onclick = function () {
             if (!coolingDown) playLetter(answer);
@@ -203,32 +197,46 @@ function render() {
         return;
     }
 
-    // SHOW
+    // SHOW — letter is the sound button; Next advances
     const item = LETTERS[index];
-    screen.appendChild(el('p', 'screen-title', 'PLAYER 1'));
-    screen.appendChild(el('div', 'giant-letter', item.letter));
-    screen.appendChild(el('div', 'giant-emoji', item.emoji));
-
-    const row = el('div', 'big-actions');
-    const hearBtn = el('button', 'big-btn primary', 'HEAR');
-    hearBtn.type = 'button';
-    hearBtn.onclick = function () {
+    const stage = el('button', 'letter-stage pulse');
+    stage.type = 'button';
+    stage.setAttribute('aria-label', 'Hear the sound');
+    stage.innerHTML =
+        '<span class="giant-letter">' + item.letter + '</span>' +
+        '<span class="stage-emoji">' + item.emoji + '</span>' +
+        '<span class="hint">Tap to hear</span>';
+    stage.onclick = function () {
         unlockAudio();
         playLetter(item);
+        stage.classList.remove('pulse');
     };
-    const nextBtn = el('button', 'big-btn secondary', 'NEXT');
-    nextBtn.type = 'button';
-    nextBtn.onclick = onNext;
-    row.appendChild(hearBtn);
-    row.appendChild(nextBtn);
-    screen.appendChild(row);
+    screen.appendChild(stage);
+
+    const next = el('button', 'big-btn primary', 'Next');
+    next.type = 'button';
+    next.onclick = onNext;
+    screen.appendChild(next);
+
     app.appendChild(screen);
+}
+
+function showLetter(autoPlay) {
+    mode = 'SHOW';
+    render();
+    if (autoPlay) {
+        setTimeout(function () {
+            playLetter(LETTERS[index]);
+        }, 280);
+    }
 }
 
 function onNext() {
     unlockAudio();
+    // First letter: always just advance so they learn the pattern
+    // Then quiz every other letter
     sinceQuiz++;
-    if (index > 0 && sinceQuiz >= 2) {
+    if (index >= 1 && sinceQuiz >= 2) {
         startQuiz();
         return;
     }
@@ -245,16 +253,16 @@ function advanceLetter() {
     }
     index++;
     save();
-    mode = 'SHOW';
-    render();
-    setTimeout(function () { playLetter(LETTERS[index]); }, 280);
+    sinceQuiz = sinceQuiz; // keep
+    showLetter(true);
 }
 
 function startQuiz() {
     sinceQuiz = 0;
     const item = LETTERS[index];
     quizAnswer = item.letter;
-    quizKind = Math.random() < 0.5 ? 'PIC' : 'SOUND';
+    // Pictures are more intuitive for 4yos — weight them
+    quizKind = Math.random() < 0.65 ? 'PIC' : 'SOUND';
 
     var wrong = item.letter;
     var guard = 0;
@@ -262,7 +270,7 @@ function startQuiz() {
         (wrong === item.letter ||
             (item.letter === 'C' && wrong === 'K') ||
             (item.letter === 'K' && wrong === 'C')) &&
-        guard < 30
+        guard < 40
     ) {
         wrong = LETTERS[Math.floor(Math.random() * Math.min(index + 1, LETTERS.length))].letter;
         guard++;
@@ -313,13 +321,29 @@ function onQuizPick(letter) {
     }
 }
 
-load();
-LETTERS.slice(0, 6).forEach(function (L) {
-    const url = './sounds/' + L.file + '.m4a';
-    if (!audioCache.has(url)) {
-        const a = new Audio(url);
-        a.preload = 'auto';
-        audioCache.set(url, a);
+// First tap anywhere unlocks audio on mobile, then auto-plays current letter
+function boot() {
+    load();
+    LETTERS.slice(0, 8).forEach(function (L) {
+        const url = './sounds/' + L.file + '.m4a';
+        if (!audioCache.has(url)) {
+            const a = new Audio(url);
+            a.preload = 'auto';
+            audioCache.set(url, a);
+        }
+    });
+    render();
+
+    // Auto-play after first user gesture (required on iOS)
+    var started = false;
+    function firstGesture() {
+        if (started) return;
+        started = true;
+        unlockAudio();
+        if (mode === 'SHOW') playLetter(LETTERS[index]);
+        document.removeEventListener('pointerdown', firstGesture, true);
     }
-});
-render();
+    document.addEventListener('pointerdown', firstGesture, true);
+}
+
+boot();
