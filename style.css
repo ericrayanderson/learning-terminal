@@ -440,6 +440,133 @@ button:disabled { cursor: not-allowed; }
   font-size: 22px !important;
 }
 
+/* Home: Words */
+.big-btn.home-words {
+  background: linear-gradient(180deg, #7af7ff 0%, var(--neon-cyan) 48%, #14959a 100%);
+  color: #041418;
+  border: 3px solid #d9fbff;
+  box-shadow:
+    var(--shadow-cyan),
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 6px 0 #0c5c60;
+}
+
+.big-btn.home-words:active:not(:disabled) {
+  box-shadow: var(--shadow-cyan), 0 2px 0 #0c5c60;
+}
+
+/* Spell-the-word */
+.word-screen {
+  gap: 14px;
+}
+
+.letter-stage.word-stage {
+  min-height: 0;
+  padding: 16px 14px 14px;
+  gap: 12px;
+  cursor: default;
+}
+
+.letter-stage.word-stage:active {
+  transform: none;
+}
+
+.word-hear {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.word-slots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.word-slot {
+  width: clamp(64px, 18vw, 84px);
+  height: clamp(64px, 18vw, 84px);
+  border-radius: 16px;
+  border: 3px solid var(--neon-cyan);
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 16px rgba(45, 226, 230, 0.08);
+  font-family: inherit;
+  font-size: clamp(32px, 9vw, 42px);
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.word-slot.filled {
+  color: var(--neon-yellow);
+  border-color: var(--neon-yellow);
+  text-shadow: 0 0 12px rgba(255, 229, 102, 0.75);
+  box-shadow: 0 0 14px rgba(255, 229, 102, 0.28);
+}
+
+.word-slot.empty::before {
+  content: '';
+  width: 26px;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(181, 168, 217, 0.5);
+}
+
+.word-slot:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.word-tiles {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.big-btn.word-tile {
+  min-height: 76px;
+  font-size: clamp(32px, 10vw, 44px);
+  padding: 8px 4px;
+  background: linear-gradient(180deg, #2a1848 0%, #1a0f2e 100%);
+  color: var(--neon-yellow);
+  border: 3px solid var(--neon-yellow);
+  box-shadow:
+    0 0 12px rgba(255, 229, 102, 0.35),
+    0 4px 0 #5c4a10;
+  text-shadow: 0 0 10px rgba(255, 229, 102, 0.65);
+}
+
+.big-btn.word-tile:active:not(:disabled) {
+  color: var(--neon-pink);
+  border-color: var(--neon-pink);
+  box-shadow: 0 0 16px rgba(255, 43, 214, 0.5), 0 2px 0 #5c0060;
+}
+
+@media (max-height: 640px) {
+  .home-choice {
+    min-height: 78px !important;
+    padding: 10px 12px !important;
+    gap: 4px !important;
+    font-size: 22px !important;
+  }
+  .home-icon { font-size: 28px; }
+  .simple-screen { gap: 10px; }
+  .word-screen { gap: 10px; }
+  .letter-stage.word-stage { padding: 10px 10px 8px; }
+  .word-stage .stage-emoji { font-size: 44px; }
+  .word-slot {
+    width: 58px;
+    height: 58px;
+    font-size: 30px;
+  }
+  .big-btn.word-tile { min-height: 62px; font-size: 30px; }
+}
+
 .dots {
   max-width: 240px;
 }

@@ -1,5 +1,5 @@
 /**
- * Learning Terminal — Letters (phonics) & Numbers practice
+ * Learning Terminal — Letters, Words, and Numbers practice
  * Neon look, big simple choices.
  * Letter sounds: Buzzphonics (MIT)
  */
@@ -34,7 +34,7 @@ const NUMBER_WORDS = {
     6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'
 };
 
-// track: home | letters | numbers-menu | counting | addition | compare
+// track: home | letters | words | numbers-menu | counting | addition | compare
 // mode: QUIZ | PLAY | DONE
 let track = 'home';
 let mode = 'QUIZ';
@@ -45,6 +45,42 @@ let quizKind = 'SOUND';
 let coolingDown = false;
 let turnsLeft = 0;
 let turnsTotal = 8;
+
+// 3-letter words a young kid knows. Letters stay inside the phonics sound set.
+const WORDS = [
+    { word: 'cat', emoji: '🐱' },
+    { word: 'dog', emoji: '🐶' },
+    { word: 'sun', emoji: '☀️' },
+    { word: 'bed', emoji: '🛏️' },
+    { word: 'pig', emoji: '🐷' },
+    { word: 'hat', emoji: '🎩' },
+    { word: 'bus', emoji: '🚌' },
+    { word: 'cup', emoji: '🥤' },
+    { word: 'bug', emoji: '🐛' },
+    { word: 'hen', emoji: '🐔' },
+    { word: 'log', emoji: '🪵' },
+    { word: 'map', emoji: '🗺️' },
+    { word: 'net', emoji: '🥅' },
+    { word: 'pot', emoji: '🍲' },
+    { word: 'rat', emoji: '🐀' },
+    { word: 'bat', emoji: '🦇' },
+    { word: 'nut', emoji: '🥜' },
+    { word: 'pan', emoji: '🍳' },
+    { word: 'pen', emoji: '✏️' },
+    { word: 'bag', emoji: '👜' },
+    { word: 'cap', emoji: '🧢' },
+    { word: 'mop', emoji: '🧹' },
+    { word: 'leg', emoji: '🦵' },
+    { word: 'pin', emoji: '📌' }
+];
+
+const WORD_LETTERS = ['S', 'A', 'T', 'P', 'I', 'N', 'M', 'D', 'G', 'O', 'C', 'E', 'U', 'R', 'H', 'B', 'F', 'L'];
+
+let wordQueue = [];
+let wordPos = 0;
+let wordTarget = null;
+let wordSpelling = [];
+let wordTiles = [];
 
 // math/count state
 let countItems = 0;
@@ -310,6 +346,7 @@ function render() {
     app.innerHTML = '';
     if (track === 'home') return renderHome();
     if (track === 'letters') return renderLetters();
+    if (track === 'words') return renderWords();
     if (track === 'numbers-menu') return renderNumbersMenu();
     if (track === 'counting') return renderCounting();
     if (track === 'addition') return renderAddition();
@@ -329,6 +366,14 @@ function renderHome() {
         startLetterQuiz();
     };
 
+    const words = el('button', 'big-btn home-words home-choice');
+    words.type = 'button';
+    words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>';
+    words.onclick = function () {
+        unlockAudio();
+        startWords();
+    };
+
     const numbers = el('button', 'big-btn secondary home-choice');
     numbers.type = 'button';
     numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span>';
@@ -339,6 +384,7 @@ function renderHome() {
 
     const col = el('div', 'big-actions');
     col.appendChild(letters);
+    col.appendChild(words);
     col.appendChild(numbers);
     screen.appendChild(col);
     app.appendChild(screen);
@@ -786,6 +832,152 @@ function onComparePick(side) {
     } else {
         wrongCooldown(function () {
             speak('which has more?', { rate: 0.95 });
+        });
+    }
+}
+
+// ——— Words (spell a 3-letter word) ———
+function letterEntry(ch) {
+    var up = String(ch).toUpperCase();
+    for (var i = 0; i < LETTERS.length; i++) {
+        if (LETTERS[i].letter === up) return LETTERS[i];
+    }
+    return { letter: up, file: up.toLowerCase() };
+}
+
+function tilesFor(word) {
+    var need = word.toUpperCase().split('');
+    var extras = shuffle(WORD_LETTERS.filter(function (L) {
+        return need.indexOf(L) === -1;
+    })).slice(0, 3);
+    return shuffle(need.concat(extras));
+}
+
+function speakWord() {
+    if (!wordTarget) return;
+    stopSound();
+    unlockAudio();
+    speak(wordTarget.word, { rate: 0.82, pitch: 1.05 });
+}
+
+function startWords() {
+    track = 'words';
+    coolingDown = false;
+    wordQueue = shuffle(WORDS).slice(0, 8);
+    wordPos = 0;
+    nextWordRound();
+}
+
+function nextWordRound() {
+    stopSound();
+    if (wordPos >= wordQueue.length) {
+        mode = 'DONE';
+        render();
+        playYes();
+        return;
+    }
+    wordTarget = wordQueue[wordPos];
+    wordSpelling = [];
+    wordTiles = tilesFor(wordTarget.word);
+    mode = 'PLAY';
+    render();
+    // In the tap that opened the round when it is a tap, so speech can start.
+    speakWord();
+}
+
+function renderWords() {
+    const screen = el('div', 'simple-screen word-screen');
+
+    if (mode === 'DONE') {
+        screen.appendChild(el('div', 'giant-emoji', '⭐'));
+        screen.appendChild(el('p', 'hint', 'Great job!'));
+        const again = el('button', 'big-btn primary', 'Again');
+        again.type = 'button';
+        again.onclick = function () {
+            unlockAudio();
+            startWords();
+        };
+        screen.appendChild(again);
+        screen.appendChild(homeLink());
+        app.appendChild(screen);
+        return;
+    }
+
+    const stage = el('div', 'letter-stage word-stage');
+    const hear = el('button', 'word-hear');
+    hear.type = 'button';
+    hear.appendChild(el('span', 'stage-emoji', wordTarget.emoji));
+    hear.appendChild(el('span', 'hint', 'Tap to hear'));
+    hear.onclick = function () {
+        if (coolingDown) return;
+        speakWord();
+    };
+    stage.appendChild(hear);
+
+    const slots = el('div', 'word-slots');
+    for (var i = 0; i < 3; i++) {
+        var filled = wordSpelling[i];
+        var slot = el('button', 'word-slot' + (filled ? ' filled' : ' empty'), filled || '');
+        slot.type = 'button';
+        slot.setAttribute('aria-label', filled ? 'Remove ' + filled : 'Empty');
+        (function (n) {
+            slot.onclick = function () { onWordSlot(n); };
+        })(i);
+        slots.appendChild(slot);
+    }
+    stage.appendChild(slots);
+    screen.appendChild(stage);
+
+    const grid = el('div', 'word-tiles');
+    wordTiles.forEach(function (letter) {
+        const btn = el('button', 'big-btn word-tile', letter);
+        btn.type = 'button';
+        if (wordSpelling.indexOf(letter) !== -1) btn.disabled = true;
+        btn.onclick = function () { onWordTile(letter); };
+        grid.appendChild(btn);
+    });
+    screen.appendChild(grid);
+    screen.appendChild(homeLink());
+    app.appendChild(screen);
+}
+
+function onWordTile(letter) {
+    if (coolingDown) return;
+    if (wordSpelling.length >= 3) return;
+    if (wordSpelling.indexOf(letter) !== -1) return;
+    wordSpelling.push(letter);
+    render();
+    playLetter(letterEntry(letter));
+    if (wordSpelling.length === 3) checkWord();
+}
+
+function onWordSlot(i) {
+    if (coolingDown) return;
+    if (i >= wordSpelling.length) return;
+    var letter = wordSpelling[i];
+    wordSpelling.splice(i, 1);
+    render();
+    playLetter(letterEntry(letter));
+}
+
+function checkWord() {
+    var spelled = wordSpelling.join('');
+    var target = wordTarget.word.toUpperCase();
+    if (spelled === target) {
+        stopSound();
+        playYes();
+        speak(wordTarget.word, { rate: 0.85 });
+        flashYes(function () {
+            if (track !== 'words') return;
+            wordPos++;
+            nextWordRound();
+        });
+    } else {
+        wrongCooldown(function () {
+            if (track !== 'words') return;
+            wordSpelling = [];
+            render();
+            speakWord();
         });
     }
 }
