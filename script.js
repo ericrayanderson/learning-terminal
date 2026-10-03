@@ -374,7 +374,7 @@ function renderHome() {
         startWords();
     };
 
-    const numbers = el('button', 'big-btn secondary home-choice');
+    const numbers = el('button', 'big-btn home-numbers home-choice');
     numbers.type = 'button';
     numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span>';
     numbers.onclick = function () {

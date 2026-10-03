@@ -455,6 +455,20 @@ button:disabled { cursor: not-allowed; }
   box-shadow: var(--shadow-cyan), 0 2px 0 #0c5c60;
 }
 
+.big-btn.home-numbers {
+  background: linear-gradient(180deg, #ffe98a 0%, var(--neon-yellow) 46%, #c9a400 100%);
+  color: #2a2200;
+  border: 3px solid #fff4c2;
+  box-shadow:
+    0 0 14px rgba(255, 229, 102, 0.55),
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 6px 0 #6a5a10;
+}
+
+.big-btn.home-numbers:active:not(:disabled) {
+  box-shadow: 0 0 14px rgba(255, 229, 102, 0.55), 0 2px 0 #6a5a10;
+}
+
 /* Spell-the-word */
 .word-screen {
   gap: 14px;
