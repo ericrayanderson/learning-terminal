@@ -35,15 +35,14 @@ const NUMBER_WORDS = {
 };
 
 // track: home | letters | numbers-menu | counting | addition | compare
-// mode: SHOW | QUIZ | PLAY | DONE
+// mode: QUIZ | PLAY | DONE
 let track = 'home';
-let mode = 'SHOW';
+let mode = 'QUIZ';
 let index = 0;
 let quizAnswer = null;
 let quizOptions = [];
 let quizKind = 'SOUND';
 let coolingDown = false;
-let sinceQuiz = 0;
 let turnsLeft = 0;
 let turnsTotal = 8;
 
@@ -158,19 +157,55 @@ function scheduleSpeech(fn, delay) {
     return id;
 }
 
-function playLetter(entry) {
-    stopSound();
-    unlockAudio();
+function getLetterAudio(entry) {
     const url = './sounds/' + entry.file + '.m4a';
     let a = audioCache.get(url);
     if (!a) {
         a = new Audio(url);
+        a.preload = 'auto';
         audioCache.set(url, a);
     }
+    return a;
+}
+
+function playLetter(entry) {
+    stopSound();
+    unlockAudio();
+    const a = getLetterAudio(entry);
+    // Ignore a muted unlock that is still resolving so it cannot pause this clip.
+    a._primeToken = (a._primeToken || 0) + 1;
+    a.muted = false;
+    a._unlocked = true;
     a.pause();
-    a.currentTime = 0;
+    try { a.currentTime = 0; } catch (e) { /* not seekable yet */ }
     currentAudio = a;
     return a.play().catch(function () {});
+}
+
+// iOS Safari only allows a clip's first play() inside a tap. Call this from the
+// answer tap so the next round can start its sound with no intro screen.
+function primeLetter(entry) {
+    if (!entry) return;
+    const a = getLetterAudio(entry);
+    if (a._unlocked) return;
+    a._unlocked = true;
+    a._primeToken = (a._primeToken || 0) + 1;
+    var token = a._primeToken;
+    a.muted = true;
+    var finish = function () {
+        if (a._primeToken !== token) return;
+        try { a.pause(); } catch (e) {}
+        try { a.currentTime = 0; } catch (e2) {}
+        a.muted = false;
+    };
+    var p = a.play();
+    if (p && typeof p.then === 'function') {
+        p.then(finish).catch(function () {
+            if (a._primeToken === token) a._unlocked = false;
+        });
+    } else {
+        finish();
+    }
 }
 
 function tone(freq, when, dur, type, gain) {
@@ -291,9 +326,7 @@ function renderHome() {
     letters.onclick = function () {
         unlockAudio();
         track = 'letters';
-        mode = 'SHOW';
-        sinceQuiz = 0;
-        showLetter(true);
+        startLetterQuiz();
     };
 
     const numbers = el('button', 'big-btn secondary home-choice');
@@ -362,9 +395,8 @@ function renderLetters() {
         again.type = 'button';
         again.onclick = function () {
             index = 0;
-            sinceQuiz = 0;
             save();
-            showLetter(true);
+            startLetterQuiz();
         };
         screen.appendChild(again);
         screen.appendChild(homeLink());
@@ -372,71 +404,32 @@ function renderLetters() {
         return;
     }
 
-    if (mode === 'QUIZ') {
-        const answer = LETTERS.find(function (L) { return L.letter === quizAnswer; });
-        const prompt = el('button', 'letter-stage');
-        prompt.type = 'button';
-        if (quizKind === 'PIC') {
-            prompt.innerHTML =
-                '<span class="stage-emoji">' + answer.emoji + '</span>' +
-                '<span class="hint">Which letter?</span>';
-        } else {
-            prompt.innerHTML =
-                '<span class="stage-speaker">🔊</span>' +
-                '<span class="hint">Which letter?</span>';
-        }
-        prompt.onclick = function () {
-            if (!coolingDown) playLetter(answer);
-        };
-        screen.appendChild(prompt);
-        const row = el('div', 'big-actions row');
-        quizOptions.forEach(function (L) {
-            const btn = el('button', 'big-btn letter-choice', L);
-            btn.type = 'button';
-            btn.onclick = function () { onLetterQuiz(L); };
-            row.appendChild(btn);
-        });
-        screen.appendChild(row);
-        screen.appendChild(homeLink());
-        app.appendChild(screen);
-        return;
+    const answer = LETTERS.find(function (L) { return L.letter === quizAnswer; });
+    const prompt = el('button', 'letter-stage');
+    prompt.type = 'button';
+    if (quizKind === 'PIC') {
+        prompt.innerHTML =
+            '<span class="stage-emoji">' + answer.emoji + '</span>' +
+            '<span class="hint">Which letter?</span>';
+    } else {
+        prompt.innerHTML =
+            '<span class="stage-speaker">🔊</span>' +
+            '<span class="hint">Which letter?</span>';
     }
-
-    const item = LETTERS[index];
-    const stage = el('button', 'letter-stage pulse');
-    stage.type = 'button';
-    stage.innerHTML =
-        '<span class="giant-letter">' + item.letter + '</span>' +
-        '<span class="stage-emoji">' + item.emoji + '</span>' +
-        '<span class="hint">Tap to hear</span>';
-    stage.onclick = function () {
-        unlockAudio();
-        playLetter(item);
-        stage.classList.remove('pulse');
+    prompt.onclick = function () {
+        if (!coolingDown) playLetter(answer);
     };
-    screen.appendChild(stage);
-    const next = el('button', 'big-btn primary', 'Next');
-    next.type = 'button';
-    next.onclick = onLetterNext;
-    screen.appendChild(next);
+    screen.appendChild(prompt);
+    const row = el('div', 'big-actions row');
+    quizOptions.forEach(function (L) {
+        const btn = el('button', 'big-btn letter-choice', L);
+        btn.type = 'button';
+        btn.onclick = function () { onLetterQuiz(L); };
+        row.appendChild(btn);
+    });
+    screen.appendChild(row);
     screen.appendChild(homeLink());
     app.appendChild(screen);
-}
-
-function showLetter(autoPlay) {
-    mode = 'SHOW';
-    render();
-    if (autoPlay) setTimeout(function () { playLetter(LETTERS[index]); }, 280);
-}
-
-function onLetterNext() {
-    unlockAudio();
-    sinceQuiz++;
-    if (index >= 1 && sinceQuiz >= 2) {
-        startLetterQuiz();
-        return;
-    }
-    advanceLetter();
 }
 
 function advanceLetter() {
@@ -449,14 +442,15 @@ function advanceLetter() {
     }
     index++;
     save();
-    showLetter(true);
+    startLetterQuiz();
 }
 
 function startLetterQuiz() {
-    sinceQuiz = 0;
     const item = LETTERS[index];
     quizAnswer = item.letter;
     quizKind = Math.random() < 0.65 ? 'PIC' : 'SOUND';
+    // First round is letter 0, so the pool still needs a second choice.
+    var pool = Math.min(Math.max(index, 1) + 1, LETTERS.length);
     var wrong = item.letter;
     var guard = 0;
     while (
@@ -465,13 +459,15 @@ function startLetterQuiz() {
             (item.letter === 'K' && wrong === 'C')) &&
         guard < 40
     ) {
-        wrong = LETTERS[Math.floor(Math.random() * Math.min(index + 1, LETTERS.length))].letter;
+        wrong = LETTERS[Math.floor(Math.random() * pool)].letter;
         guard++;
     }
     quizOptions = shuffle([quizAnswer, wrong]);
     mode = 'QUIZ';
     render();
-    setTimeout(function () { playLetter(item); }, 300);
+    // No intro timer. A delayed play() sits outside the tap, which mobile
+    // Safari blocks for the first clip. Later rounds were primed on the answer tap.
+    playLetter(item);
 }
 
 function onLetterQuiz(letter) {
@@ -480,9 +476,16 @@ function onLetterQuiz(letter) {
     if (letter === quizAnswer) {
         stopSound();
         playYes();
-        flashYes(function () { advanceLetter(); });
+        if (index + 1 < LETTERS.length) primeLetter(LETTERS[index + 1]);
+        flashYes(function () {
+            if (track !== 'letters') return;
+            advanceLetter();
+        });
     } else {
-        wrongCooldown(function () { playLetter(answer); });
+        wrongCooldown(function () {
+            if (track !== 'letters') return;
+            playLetter(answer);
+        });
     }
 }
 
