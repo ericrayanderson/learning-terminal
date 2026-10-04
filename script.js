@@ -1033,6 +1033,26 @@ function wrongCooldown(after) {
     }, WRONG_MS);
 }
 
+// Double-tap and a slightly dragged tap can select a button's label (a text node
+// or a span) and that gesture never becomes a press. Cancel it without touching
+// real text fields, and without preventDefault on touchend (that would swallow the tap).
+function isTextField(node) {
+    var el = node && node.nodeType === 1 ? node : (node && node.parentElement);
+    return !!(el && el.closest && el.closest('input, textarea, select, [contenteditable="true"]'));
+}
+
+function blockTextGesture(e) {
+    if (isTextField(e.target)) return;
+    e.preventDefault();
+}
+
+(function () {
+    var opts = { capture: true, passive: false };
+    ['selectstart', 'dragstart', 'contextmenu', 'gesturestart', 'dblclick'].forEach(function (type) {
+        document.addEventListener(type, blockTextGesture, opts);
+    });
+})();
+
 function boot() {
     load();
     track = 'home';
