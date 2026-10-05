@@ -187,6 +187,10 @@ function stopSound() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
 }
 
+// Bumped on every speak so a cancelled utterance cannot mark the new one finished.
+var speechGen = 0;
+var speakDone = true;
+
 function speak(text, opts) {
     opts = opts || {};
     if (!window.speechSynthesis || !text) return;
@@ -203,6 +207,13 @@ function speak(text, opts) {
     u.lang = 'en-US';
     const voice = pickVoice();
     if (voice) u.voice = voice;
+    var gen = ++speechGen;
+    speakDone = false;
+    function finish() {
+        if (gen === speechGen) speakDone = true;
+    }
+    u.onend = finish;
+    u.onerror = finish;
     window.speechSynthesis.speak(u);
 }
 
@@ -237,6 +248,7 @@ function playLetter(entry) {
     // Ignore a muted unlock that is still resolving so it cannot pause this clip.
     a._primeToken = (a._primeToken || 0) + 1;
     a.muted = false;
+    a.volume = 1;
     a._unlocked = true;
     a.pause();
     try { a.currentTime = 0; } catch (e) { /* not seekable yet */ }
@@ -306,12 +318,13 @@ function primeLetter(entry) {
     a._unlocked = true;
     a._primeToken = (a._primeToken || 0) + 1;
     var token = a._primeToken;
+    // Stay silent. Unmuting here used to leak the next letter under the Yes card.
     a.muted = true;
+    a.volume = 0;
     var finish = function () {
         if (a._primeToken !== token) return;
         try { a.pause(); } catch (e) {}
         try { a.currentTime = 0; } catch (e2) {}
-        a.muted = false;
     };
     var p = a.play();
     if (p && typeof p.then === 'function') {
@@ -609,7 +622,7 @@ function renderLetters() {
     app.appendChild(screen);
 }
 
-function advanceLetter() {
+function advanceLetter(deferSound) {
     stopSound();
     if (index + 1 >= LETTERS.length) {
         mode = 'DONE';
@@ -619,10 +632,10 @@ function advanceLetter() {
     }
     index++;
     save();
-    startLetterQuiz();
+    startLetterQuiz(deferSound);
 }
 
-function startLetterQuiz() {
+function startLetterQuiz(deferSound) {
     const item = LETTERS[index];
     quizAnswer = item.letter;
     quizKind = Math.random() < 0.65 ? 'PIC' : 'SOUND';
@@ -644,7 +657,16 @@ function startLetterQuiz() {
     render();
     // No intro timer. A delayed play() sits outside the tap, which mobile
     // Safari blocks for the first clip. Later rounds were primed on the answer tap.
-    playLetter(item);
+    // After a Yes card, wait until that card is painted away and this question
+    // is on screen, then play. The first round still plays inside the tap.
+    if (deferSound) {
+        afterPaint(function () {
+            if (track !== 'letters' || mode !== 'QUIZ') return;
+            playLetter(item);
+        });
+    } else {
+        playLetter(item);
+    }
 }
 
 function onLetterQuiz(letter) {
@@ -656,7 +678,7 @@ function onLetterQuiz(letter) {
         if (index + 1 < LETTERS.length) primeLetter(LETTERS[index + 1]);
         flashYes(function () {
             if (track !== 'letters') return;
-            advanceLetter();
+            advanceLetter(true);
         });
     } else {
         wrongCooldown(function () {
@@ -685,7 +707,7 @@ function startSounds() {
     nextSoundRound();
 }
 
-function nextSoundRound() {
+function nextSoundRound(deferSound) {
     stopSound();
     if (soundPos >= soundQueue.length) {
         mode = 'DONE';
@@ -706,7 +728,15 @@ function nextSoundRound() {
     mode = 'PLAY';
     render();
     // Inside the tap on the first round. Later rounds were primed on the answer tap.
-    playLetter(item);
+    // After a Yes card, the new question is painted before this clip starts.
+    if (deferSound) {
+        afterPaint(function () {
+            if (track !== 'sounds' || mode !== 'PLAY') return;
+            playLetter(item);
+        });
+    } else {
+        playLetter(item);
+    }
 }
 
 function renderSounds() {
@@ -760,7 +790,7 @@ function onSoundPick(letter) {
         flashYes(function () {
             if (track !== 'sounds') return;
             soundPos++;
-            nextSoundRound();
+            nextSoundRound(true);
         });
     } else {
         wrongCooldown(function () {
@@ -1105,7 +1135,7 @@ function startWords() {
     nextWordRound();
 }
 
-function nextWordRound() {
+function nextWordRound(deferSound) {
     letterWaitGen++;
     wordLocked = false;
     stopSound();
@@ -1121,7 +1151,15 @@ function nextWordRound() {
     mode = 'PLAY';
     render();
     // In the tap that opened the round when it is a tap, so speech can start.
-    speakWord();
+    // After a Yes card, the new word is on screen before it is spoken.
+    if (deferSound) {
+        afterPaint(function () {
+            if (track !== 'words' || mode !== 'PLAY') return;
+            speakWord();
+        });
+    } else {
+        speakWord();
+    }
 }
 
 function renderWords() {
@@ -1222,7 +1260,7 @@ function checkWord() {
         flashYes(function () {
             if (track !== 'words') return;
             wordPos++;
-            nextWordRound();
+            nextWordRound(true);
         });
     } else {
         wrongCooldown(function () {
@@ -1248,13 +1286,37 @@ function renderNumDone(screen, title, againFn) {
     app.appendChild(screen);
 }
 
+// Run after the browser has painted the current DOM.
+function afterPaint(fn) {
+    requestAnimationFrame(function () {
+        requestAnimationFrame(fn);
+    });
+}
+
 // ——— Feedback ———
+// Yes card stays up at least 700ms, and until its speech ends. Then the card
+// is painted away, and only then does nextFn show the following question.
+var YES_MS = 700;
+var YES_CAP = 2200;
+
 function flashYes(nextFn) {
     yesOverlay.classList.remove('hidden');
-    setTimeout(function () {
-        yesOverlay.classList.add('hidden');
-        nextFn();
-    }, 700);
+    var since = Date.now();
+    var gen = speechGen;
+    var waitSpeech = !speakDone;
+    function tick() {
+        var elapsed = Date.now() - since;
+        var speaking = waitSpeech && gen === speechGen && !speakDone && elapsed < YES_CAP;
+        if (elapsed >= YES_MS && !speaking) {
+            yesOverlay.classList.add('hidden');
+            afterPaint(function () {
+                if (nextFn) nextFn();
+            });
+            return;
+        }
+        setTimeout(tick, 40);
+    }
+    setTimeout(tick, 40);
 }
 
 function wrongCooldown(after) {
