@@ -5,6 +5,7 @@
  */
 
 const STORAGE_KEY = 'lt-home-v2';
+const SCORES_KEY = 'lt-scores-v1';
 const WRONG_MS = 1600;
 
 const LETTERS = [
@@ -34,7 +35,7 @@ const NUMBER_WORDS = {
     6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'
 };
 
-// track: home | letters-menu | letters | sounds | words | numbers-menu | counting | addition | compare
+// track: home | letters-menu | letters | sounds | words | numbers-menu | counting | addition | compare | history
 // mode: QUIZ | PLAY | DONE
 let track = 'home';
 let mode = 'QUIZ';
@@ -105,17 +106,181 @@ let mathB = 0;
 let compareLeft = 0;
 let compareRight = 0;
 
+// Running totals for the current 8-round (or word) session. Dropped if the
+// kid leaves before the done screen. Letter Match keeps its own tallies in
+// the progress save, because that set can be finished on a later visit.
+let roundCorrect = 0;
+let roundIncorrect = 0;
+let roundScored = false;
+let letterCorrect = 0;
+let letterIncorrect = 0;
+let historyConfirm = false;
+let historyExportText = '';
+let historyExportName = '';
+
+function countOrZero(n) {
+    return typeof n === 'number' && isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+}
+
 function load() {
     try {
         const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
         if (typeof p.letterIndex === 'number') {
             index = Math.min(Math.max(0, p.letterIndex), LETTERS.length - 1);
         }
+        letterCorrect = countOrZero(p.letterCorrect);
+        letterIncorrect = countOrZero(p.letterIncorrect);
     } catch (e) { /* ignore */ }
 }
 
 function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ letterIndex: index }));
+    // letterIndex is the saved Letter Match place. The extra fields are only
+    // the in-progress tallies for that same set.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        letterIndex: index,
+        letterCorrect: letterCorrect,
+        letterIncorrect: letterIncorrect
+    }));
+}
+
+function beginSession() {
+    roundCorrect = 0;
+    roundIncorrect = 0;
+    roundScored = false;
+}
+
+function markRoundStart() {
+    roundScored = false;
+}
+
+// A finished round counts once as correct, even after retries.
+// Each wrong try counts as incorrect. Leaving before the done screen
+// does not write a score.
+function markCorrect() {
+    if (roundScored) return;
+    roundScored = true;
+    roundCorrect++;
+}
+
+function markIncorrect() {
+    roundIncorrect++;
+}
+
+function loadScores() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(SCORES_KEY) || '[]');
+        if (!Array.isArray(raw)) return [];
+        return raw.filter(function (r) {
+            return r && typeof r.game === 'string' && typeof r.endedAt === 'string';
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
+function finishSession(game, correct, incorrect, total) {
+    try {
+        correct = countOrZero(correct);
+        incorrect = countOrZero(incorrect);
+        total = countOrZero(total);
+        if (!game || total <= 0) return;
+        const now = new Date();
+        const all = loadScores();
+        all.push({
+            endedAt: now.toISOString(),
+            endedLocal: now.toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            }),
+            game: game,
+            correct: correct,
+            incorrect: incorrect,
+            total: total
+        });
+        localStorage.setItem(SCORES_KEY, JSON.stringify(all));
+    } catch (e) { /* storage full or blocked */ }
+}
+
+function localDay(d) {
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+}
+
+function anchorDownload(filename, json) {
+    var blob = new Blob([json], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+        a.remove();
+        URL.revokeObjectURL(url);
+    }, 1500);
+}
+
+function isStandalone() {
+    try {
+        if (window.navigator.standalone) return true;
+        return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    } catch (e) {
+        return false;
+    }
+}
+
+function showExportText(filename, json) {
+    historyExportName = filename;
+    historyExportText = json;
+    historyConfirm = false;
+    if (track !== 'history') track = 'history';
+    render();
+}
+
+// Home-screen iOS has no tab UI. A blob download replaces the app with a
+// page that cannot be closed, so that path is only used in a normal tab.
+function fallbackExport(filename, json) {
+    if (!isStandalone()) {
+        try {
+            anchorDownload(filename, json);
+            return;
+        } catch (e) { /* show the text instead */ }
+    }
+    showExportText(filename, json);
+}
+
+// Share sheet first (Save to Files on iPhone). Then a download link.
+// Then the JSON itself, so it can be copied.
+function exportScores() {
+    var records = loadScores().slice().reverse();
+    var json = JSON.stringify(records, null, 2);
+    var filename = 'learning-terminal-scores-' + localDay(new Date()) + '.json';
+    var types = ['application/json', 'text/plain'];
+    for (var i = 0; i < types.length; i++) {
+        try {
+            var file = new File([json], filename, { type: types[i] });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file] }).catch(function (err) {
+                    if (err && err.name === 'AbortError') return;
+                    fallbackExport(filename, json);
+                });
+                return;
+            }
+        } catch (e) { /* this type cannot be shared */ }
+    }
+    fallbackExport(filename, json);
+}
+
+function clearScores() {
+    try { localStorage.removeItem(SCORES_KEY); } catch (e) { /* ignore */ }
+    historyConfirm = false;
+    render();
 }
 
 // ——— Audio ———
@@ -457,9 +622,106 @@ function goNumbersMenu() {
 }
 
 // ——— Render ———
+function goHistory() {
+    stopSound();
+    coolingDown = false;
+    historyConfirm = false;
+    historyExportText = '';
+    track = 'history';
+    render();
+}
+
+function renderHistory() {
+    const screen = el('div', 'simple-screen history-screen');
+
+    if (historyExportText) {
+        screen.appendChild(el('p', 'hint', 'Scores'));
+        screen.appendChild(el('p', 'history-when', historyExportName));
+        const box = el('textarea', 'score-json');
+        box.readOnly = true;
+        box.value = historyExportText;
+        box.setAttribute('aria-label', 'Score JSON');
+        screen.appendChild(box);
+        const copy = el('button', 'big-btn primary history-btn', 'Copy');
+        copy.type = 'button';
+        copy.onclick = function () {
+            var done = function () { copy.textContent = 'Copied'; };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(historyExportText).then(done).catch(function () {
+                    box.focus();
+                    box.select();
+                });
+                return;
+            }
+            box.focus();
+            box.select();
+            try { document.execCommand('copy'); done(); } catch (e) {}
+        };
+        screen.appendChild(copy);
+        screen.appendChild(homeLink('Back', function () {
+            historyExportText = '';
+            render();
+        }));
+        app.appendChild(screen);
+        return;
+    }
+
+    screen.appendChild(el('p', 'hint', 'History'));
+    const list = el('div', 'history-list');
+    const records = loadScores().slice().reverse();
+    if (!records.length) {
+        list.appendChild(el('p', 'history-empty', 'No scores yet'));
+    } else {
+        records.forEach(function (rec) {
+            const row = el('div', 'history-row');
+            row.appendChild(el('p', 'history-when', rec.endedLocal || rec.endedAt));
+            row.appendChild(el('p', 'history-game', rec.game));
+            row.appendChild(el('p', 'history-score', rec.correct + ' correct · ' + rec.incorrect + ' incorrect'));
+            var rounds = countOrZero(rec.total);
+            row.appendChild(el('p', 'history-rounds', rounds + (rounds === 1 ? ' round' : ' rounds')));
+            list.appendChild(row);
+        });
+    }
+    screen.appendChild(list);
+
+    const actions = el('div', 'history-actions');
+    const exp = el('button', 'big-btn primary history-btn', 'Export');
+    exp.type = 'button';
+    exp.onclick = exportScores;
+    actions.appendChild(exp);
+
+    if (records.length && historyConfirm) {
+        actions.appendChild(el('p', 'history-ask', 'Clear all scores?'));
+        const keep = el('button', 'big-btn primary history-btn', 'Keep');
+        keep.type = 'button';
+        keep.onclick = function () {
+            historyConfirm = false;
+            render();
+        };
+        const wipe = el('button', 'home-link', 'Clear scores');
+        wipe.type = 'button';
+        wipe.onclick = clearScores;
+        actions.appendChild(keep);
+        actions.appendChild(wipe);
+    } else if (records.length) {
+        const clearBtn = el('button', 'home-link', 'Clear history');
+        clearBtn.type = 'button';
+        clearBtn.onclick = function () {
+            historyConfirm = true;
+            render();
+        };
+        actions.appendChild(clearBtn);
+    }
+    screen.appendChild(actions);
+    screen.appendChild(homeLink('Back', goHome));
+    app.appendChild(screen);
+}
+
 function render() {
     app.innerHTML = '';
+    app.classList.toggle('showing-history', track === 'history');
     if (track === 'home') return renderHome();
+    if (track === 'history') return renderHistory();
     if (track === 'letters-menu') return renderLettersMenu();
     if (track === 'letters') return renderLetters();
     if (track === 'sounds') return renderSounds();
@@ -494,6 +756,9 @@ function renderHome() {
     col.appendChild(letters);
     col.appendChild(numbers);
     screen.appendChild(col);
+    const history = homeLink('History', goHistory);
+    history.classList.add('history-link');
+    screen.appendChild(history);
     app.appendChild(screen);
 }
 
@@ -585,6 +850,8 @@ function renderLetters() {
         again.type = 'button';
         again.onclick = function () {
             index = 0;
+            letterCorrect = 0;
+            letterIncorrect = 0;
             save();
             startLetterQuiz();
         };
@@ -625,6 +892,10 @@ function renderLetters() {
 function advanceLetter(deferSound) {
     stopSound();
     if (index + 1 >= LETTERS.length) {
+        finishSession('Letter Match', letterCorrect, letterIncorrect, letterCorrect);
+        letterCorrect = 0;
+        letterIncorrect = 0;
+        save();
         mode = 'DONE';
         render();
         playYes();
@@ -654,6 +925,7 @@ function startLetterQuiz(deferSound) {
     }
     quizOptions = shuffle([quizAnswer, wrong]);
     mode = 'QUIZ';
+    markRoundStart();
     render();
     // No intro timer. A delayed play() sits outside the tap, which mobile
     // Safari blocks for the first clip. Later rounds were primed on the answer tap.
@@ -673,6 +945,11 @@ function onLetterQuiz(letter) {
     if (coolingDown) return;
     const answer = LETTERS.find(function (L) { return L.letter === quizAnswer; });
     if (letter === quizAnswer) {
+        if (!roundScored) {
+            roundScored = true;
+            letterCorrect++;
+            save();
+        }
         stopSound();
         playYes();
         if (index + 1 < LETTERS.length) primeLetter(LETTERS[index + 1]);
@@ -681,6 +958,8 @@ function onLetterQuiz(letter) {
             advanceLetter(true);
         });
     } else {
+        letterIncorrect++;
+        save();
         wrongCooldown(function () {
             if (track !== 'letters') return;
             playLetter(answer);
@@ -702,6 +981,7 @@ function sameSoundFile(a, b) {
 function startSounds() {
     track = 'sounds';
     coolingDown = false;
+    beginSession();
     soundQueue = shuffle(LETTERS).slice(0, 8);
     soundPos = 0;
     nextSoundRound();
@@ -710,11 +990,13 @@ function startSounds() {
 function nextSoundRound(deferSound) {
     stopSound();
     if (soundPos >= soundQueue.length) {
+        finishSession('Phonics', roundCorrect, roundIncorrect, roundCorrect);
         mode = 'DONE';
         render();
         playYes();
         return;
     }
+    markRoundStart();
     var item = soundQueue[soundPos];
     quizAnswer = item.letter;
     quizKind = 'SOUND';
@@ -784,6 +1066,7 @@ function onSoundPick(letter) {
     if (coolingDown) return;
     var answer = soundQueue[soundPos];
     if (letter === quizAnswer) {
+        markCorrect();
         stopSound();
         playYes();
         if (soundPos + 1 < soundQueue.length) primeLetter(soundQueue[soundPos + 1]);
@@ -793,6 +1076,7 @@ function onSoundPick(letter) {
             nextSoundRound(true);
         });
     } else {
+        markIncorrect();
         wrongCooldown(function () {
             if (track !== 'sounds') return;
             playLetter(answer);
@@ -805,6 +1089,7 @@ function startCounting() {
     track = 'counting';
     turnsTotal = 8;
     turnsLeft = 8;
+    beginSession();
     nextCountingRound();
 }
 
@@ -819,6 +1104,7 @@ function nextCountingRound() {
     quizOptions = shuffle(Array.from(opts));
     quizAnswer = countItems;
     mode = 'PLAY';
+    markRoundStart();
     render();
     // Held in speechTimers so an answer tap cancels it. Otherwise this
     // prompt speaks over the Yes / Try again card when the kid answers fast.
@@ -919,12 +1205,14 @@ function sayCorrectCount(n) {
 function onCountPick(n) {
     if (coolingDown) return;
     if (n === quizAnswer) {
+        markCorrect();
         stopSound();
         playYes();
         speak(NUMBER_WORDS[n] || String(n), { rate: 0.9 });
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
+                finishSession('Counting', roundCorrect, roundIncorrect, roundCorrect);
                 mode = 'DONE';
                 render();
                 playYes();
@@ -933,6 +1221,7 @@ function onCountPick(n) {
             nextCountingRound();
         });
     } else {
+        markIncorrect();
         // Don't re-run a full count-out (timers used to stack and sound random).
         // Say the correct total clearly, once.
         wrongCooldown(function () {
@@ -946,6 +1235,7 @@ function startAddition() {
     track = 'addition';
     turnsTotal = 8;
     turnsLeft = 8;
+    beginSession();
     nextAdditionRound();
 }
 
@@ -965,6 +1255,7 @@ function nextAdditionRound() {
     }
     quizOptions = shuffle(Array.from(opts));
     mode = 'PLAY';
+    markRoundStart();
     render();
     // Held in speechTimers so an answer tap cancels it before feedback.
     scheduleSpeech(function () {
@@ -1009,12 +1300,14 @@ function renderAddition() {
 function onAddPick(n) {
     if (coolingDown) return;
     if (n === quizAnswer) {
+        markCorrect();
         stopSound();
         playYes();
         speak(NUMBER_WORDS[n] || String(n), { rate: 0.9 });
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
+                finishSession('Adding', roundCorrect, roundIncorrect, roundCorrect);
                 mode = 'DONE';
                 render();
                 playYes();
@@ -1023,6 +1316,7 @@ function onAddPick(n) {
             nextAdditionRound();
         });
     } else {
+        markIncorrect();
         wrongCooldown(function () {
             speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
         });
@@ -1034,6 +1328,7 @@ function startCompare() {
     track = 'compare';
     turnsTotal = 8;
     turnsLeft = 8;
+    beginSession();
     nextCompareRound();
 }
 
@@ -1044,6 +1339,7 @@ function nextCompareRound() {
     } while (compareLeft === compareRight);
     quizAnswer = compareLeft > compareRight ? 'LEFT' : 'RIGHT';
     mode = 'PLAY';
+    markRoundStart();
     render();
     // Held in speechTimers so an answer tap cancels it before feedback.
     scheduleSpeech(function () {
@@ -1085,6 +1381,7 @@ function renderCompare() {
 function onComparePick(side) {
     if (coolingDown) return;
     if (side === quizAnswer) {
+        markCorrect();
         stopSound();
         playYes();
         var n = side === 'LEFT' ? compareLeft : compareRight;
@@ -1092,6 +1389,7 @@ function onComparePick(side) {
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
+                finishSession('Which more?', roundCorrect, roundIncorrect, roundCorrect);
                 mode = 'DONE';
                 render();
                 playYes();
@@ -1100,6 +1398,7 @@ function onComparePick(side) {
             nextCompareRound();
         });
     } else {
+        markIncorrect();
         wrongCooldown(function () {
             speak('which has more?', { rate: 0.95 });
         });
@@ -1135,6 +1434,7 @@ function startWords() {
     wordLocked = false;
     track = 'words';
     coolingDown = false;
+    beginSession();
     wordQueue = shuffle(WORDS).slice(0, 8);
     wordPos = 0;
     nextWordRound();
@@ -1145,11 +1445,13 @@ function nextWordRound(deferSound) {
     wordLocked = false;
     stopSound();
     if (wordPos >= wordQueue.length) {
+        finishSession('Words', roundCorrect, roundIncorrect, roundCorrect);
         mode = 'DONE';
         render();
         playYes();
         return;
     }
+    markRoundStart();
     wordTarget = wordQueue[wordPos];
     wordSpelling = [];
     wordTiles = tilesFor(wordTarget.word);
@@ -1260,6 +1562,7 @@ function checkWord() {
     var spelled = wordSpelling.join('');
     var target = wordTarget.word.toUpperCase();
     if (spelled === target) {
+        markCorrect();
         playYes();
         speak(wordTarget.word, { rate: 0.85, cancel: false });
         flashYes(function () {
@@ -1268,6 +1571,7 @@ function checkWord() {
             nextWordRound(true);
         });
     } else {
+        markIncorrect();
         wrongCooldown(function () {
             if (track !== 'words') return;
             wordSpelling = [];
