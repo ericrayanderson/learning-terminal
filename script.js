@@ -81,6 +81,20 @@ let wordPos = 0;
 let wordTarget = null;
 let wordSpelling = [];
 let wordTiles = [];
+// True while the third letter's phoneme is still playing, so a slot tap
+// can't change the word before it is judged.
+let wordLocked = false;
+// Bumped to ignore a letter-end callback after the kid has left the round.
+let letterWaitGen = 0;
+// Seconds from the start of each Buzzphonics clip where the phoneme has
+// finished, plus a short breath. The files pad a silent tail (~0.4–0.8s);
+// waiting for `ended` would leave a dead pause before the feedback.
+const LETTER_HEARD_AT = {
+    a: 0.54, b: 0.89, c: 1.01, d: 0.90, e: 0.87, f: 0.81, g: 1.14,
+    h: 0.83, i: 0.90, j: 0.57, l: 1.16, m: 1.47, n: 1.16, o: 0.87,
+    p: 0.92, qu: 0.73, r: 0.79, s: 0.97, t: 0.80, u: 0.60, v: 0.67,
+    w: 0.94, x: 0.84, y: 0.68, z: 0.69
+};
 
 // math/count state
 let countItems = 0;
@@ -174,9 +188,12 @@ function stopSound() {
 function speak(text, opts) {
     opts = opts || {};
     if (!window.speechSynthesis || !text) return;
-    // Only cancel if this is a fresh "interrupt" speak (default true)
+    // Only cancel if this is a fresh "interrupt" speak (default true).
+    // Cancelling and then speaking outside the original tap is dropped on iOS.
     if (opts.cancel !== false) {
         window.speechSynthesis.cancel();
+    } else if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
     }
     const u = new SpeechSynthesisUtterance(text);
     u.rate = opts.rate != null ? opts.rate : 0.9;
@@ -199,9 +216,16 @@ function getLetterAudio(entry) {
     if (!a) {
         a = new Audio(url);
         a.preload = 'auto';
+        a._letterUrl = url;
         audioCache.set(url, a);
     }
     return a;
+}
+
+function letterHeardTarget(audio) {
+    var src = (audio && (audio._letterUrl || audio.currentSrc || audio.src)) || '';
+    var file = src.split('/').pop().replace(/\.m4a.*$/, '');
+    return LETTER_HEARD_AT[file] || 0;
 }
 
 function playLetter(entry) {
@@ -215,7 +239,60 @@ function playLetter(entry) {
     a.pause();
     try { a.currentTime = 0; } catch (e) { /* not seekable yet */ }
     currentAudio = a;
-    return a.play().catch(function () {});
+    var pending = a.play();
+    a._lastPlay = pending;
+    if (pending && typeof pending.catch === 'function') pending.catch(function () {});
+    return a;
+}
+
+// Call fn after this clip's phoneme has been heard. Does not pause the clip
+// or cancel speech — the caller decides that once the sound has finished.
+function whenLetterHeard(audio, fn) {
+    if (!audio) { fn(); return; }
+    var token = audio._primeToken;
+    var gen = ++letterWaitGen;
+    var finished = false;
+    var started = Date.now();
+    function cleanup() {
+        clearInterval(poll);
+        audio.removeEventListener('ended', tick);
+        audio.removeEventListener('timeupdate', tick);
+    }
+    function finish() {
+        if (finished || gen !== letterWaitGen) return;
+        if (audio._primeToken !== token) return;
+        finished = true;
+        cleanup();
+        letterWaitGen++;
+        fn();
+    }
+    function tick() {
+        if (finished) return;
+        if (gen !== letterWaitGen || audio._primeToken !== token) {
+            finished = true;
+            cleanup();
+            return;
+        }
+        var target = letterHeardTarget(audio);
+        if (audio.ended || (target && audio.currentTime >= target)) {
+            finish();
+            return;
+        }
+        // Give up only if playback is stuck. A clip that is still advancing
+        // keeps playing — this must not pause it early.
+        if (Date.now() - started > 4000) {
+            var dur = audio.duration;
+            var stillPlaying = !audio.paused && !audio.ended &&
+                !(isFinite(dur) && dur > 0 && audio.currentTime >= dur - 0.05);
+            if (!stillPlaying || Date.now() - started > 8000) finish();
+        }
+    }
+    var poll = setInterval(tick, 40);
+    audio.addEventListener('ended', tick);
+    audio.addEventListener('timeupdate', tick);
+    if (audio._lastPlay && typeof audio._lastPlay.then === 'function') {
+        audio._lastPlay.catch(function () { finish(); });
+    }
 }
 
 // iOS Safari only allows a clip's first play() inside a tap. Call this from the
@@ -328,6 +405,8 @@ function homeLink(label, onClick) {
 }
 
 function goHome() {
+    letterWaitGen++;
+    wordLocked = false;
     stopSound();
     coolingDown = false;
     track = 'home';
@@ -861,6 +940,8 @@ function speakWord() {
 }
 
 function startWords() {
+    letterWaitGen++;
+    wordLocked = false;
     track = 'words';
     coolingDown = false;
     wordQueue = shuffle(WORDS).slice(0, 8);
@@ -869,6 +950,8 @@ function startWords() {
 }
 
 function nextWordRound() {
+    letterWaitGen++;
+    wordLocked = false;
     stopSound();
     if (wordPos >= wordQueue.length) {
         mode = 'DONE';
@@ -909,7 +992,7 @@ function renderWords() {
     hear.appendChild(el('span', 'stage-emoji', wordTarget.emoji));
     hear.appendChild(el('span', 'hint', 'Tap to hear'));
     hear.onclick = function () {
-        if (coolingDown) return;
+        if (coolingDown || wordLocked) return;
         speakWord();
     };
     stage.appendChild(hear);
@@ -942,17 +1025,31 @@ function renderWords() {
 }
 
 function onWordTile(letter) {
-    if (coolingDown) return;
+    if (coolingDown || wordLocked) return;
     if (wordSpelling.length >= 3) return;
     if (wordSpelling.indexOf(letter) !== -1) return;
     wordSpelling.push(letter);
     render();
-    playLetter(letterEntry(letter));
-    if (wordSpelling.length === 3) checkWord();
+    var clip = playLetter(letterEntry(letter));
+    if (wordSpelling.length < 3) return;
+    // checkWord() used to run in this tap and stopSound() killed the clip
+    // before it could be heard. Wait until the phoneme finishes, then judge.
+    wordLocked = true;
+    whenLetterHeard(clip, function () {
+        wordLocked = false;
+        if (track !== 'words' || mode !== 'PLAY') return;
+        // Drop the silent tail so the feedback speech isn't ducked, without
+        // cancelling the synthesizer (that would swallow the word on iOS).
+        if (currentAudio === clip) {
+            try { clip.pause(); } catch (e) {}
+            currentAudio = null;
+        }
+        checkWord();
+    });
 }
 
 function onWordSlot(i) {
-    if (coolingDown) return;
+    if (coolingDown || wordLocked) return;
     if (i >= wordSpelling.length) return;
     var letter = wordSpelling[i];
     wordSpelling.splice(i, 1);
@@ -964,9 +1061,8 @@ function checkWord() {
     var spelled = wordSpelling.join('');
     var target = wordTarget.word.toUpperCase();
     if (spelled === target) {
-        stopSound();
         playYes();
-        speak(wordTarget.word, { rate: 0.85 });
+        speak(wordTarget.word, { rate: 0.85, cancel: false });
         flashYes(function () {
             if (track !== 'words') return;
             wordPos++;
