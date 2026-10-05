@@ -1,5 +1,5 @@
 /**
- * Learning Terminal — Letters, Sounds, Words, and Numbers practice
+ * Learning Terminal — Letters (Phonics, Letter Match, Words) and Numbers practice
  * Neon look, big simple choices.
  * Letter sounds: Buzzphonics (MIT)
  */
@@ -34,7 +34,7 @@ const NUMBER_WORDS = {
     6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'
 };
 
-// track: home | letters | sounds | words | numbers-menu | counting | addition | compare
+// track: home | letters-menu | letters | sounds | words | numbers-menu | counting | addition | compare
 // mode: QUIZ | PLAY | DONE
 let track = 'home';
 let mode = 'QUIZ';
@@ -427,6 +427,15 @@ function goHome() {
     render();
 }
 
+function goLettersMenu() {
+    letterWaitGen++;
+    wordLocked = false;
+    stopSound();
+    coolingDown = false;
+    track = 'letters-menu';
+    render();
+}
+
 function goNumbersMenu() {
     stopSound();
     coolingDown = false;
@@ -438,6 +447,7 @@ function goNumbersMenu() {
 function render() {
     app.innerHTML = '';
     if (track === 'home') return renderHome();
+    if (track === 'letters-menu') return renderLettersMenu();
     if (track === 'letters') return renderLetters();
     if (track === 'sounds') return renderSounds();
     if (track === 'words') return renderWords();
@@ -451,18 +461,47 @@ function renderHome() {
     const screen = el('div', 'simple-screen');
     screen.appendChild(el('p', 'hint', 'Pick one'));
 
-    const sounds = el('button', 'big-btn primary home-choice');
-    sounds.type = 'button';
-    sounds.innerHTML = '<span class="home-icon">🔊</span><span>Sounds</span>' + levelHtml(1);
-    sounds.onclick = function () {
+    const letters = el('button', 'big-btn home-letters home-choice');
+    letters.type = 'button';
+    letters.innerHTML = '<span class="home-icon">Aa</span><span>Letters</span><span class="home-level">Easy – Harder</span>';
+    letters.onclick = function () {
+        unlockAudio();
+        goLettersMenu();
+    };
+
+    const numbers = el('button', 'big-btn home-numbers home-choice');
+    numbers.type = 'button';
+    numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span><span class="home-level">Easy – Harder</span>';
+    numbers.onclick = function () {
+        unlockAudio();
+        goNumbersMenu();
+    };
+
+    const col = el('div', 'big-actions');
+    col.appendChild(letters);
+    col.appendChild(numbers);
+    screen.appendChild(col);
+    app.appendChild(screen);
+}
+
+function renderLettersMenu() {
+    const screen = el('div', 'simple-screen');
+    screen.appendChild(el('p', 'hint', 'Letters'));
+
+    const col = el('div', 'big-actions');
+
+    const phonics = el('button', 'big-btn primary home-choice');
+    phonics.type = 'button';
+    phonics.innerHTML = '<span class="home-icon">🔊</span><span>Phonics</span>' + levelHtml(1);
+    phonics.onclick = function () {
         unlockAudio();
         startSounds();
     };
 
-    const letters = el('button', 'big-btn home-letters home-choice');
-    letters.type = 'button';
-    letters.innerHTML = '<span class="home-icon">Aa</span><span>Letters</span>' + levelHtml(2);
-    letters.onclick = function () {
+    const match = el('button', 'big-btn home-letters home-choice');
+    match.type = 'button';
+    match.innerHTML = '<span class="home-icon">Aa</span><span>Letter Match</span>' + levelHtml(2);
+    match.onclick = function () {
         unlockAudio();
         track = 'letters';
         startLetterQuiz();
@@ -476,20 +515,11 @@ function renderHome() {
         startWords();
     };
 
-    const numbers = el('button', 'big-btn home-numbers home-choice');
-    numbers.type = 'button';
-    numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span><span class="home-level">Easy – Harder</span>';
-    numbers.onclick = function () {
-        unlockAudio();
-        goNumbersMenu();
-    };
-
-    const col = el('div', 'big-actions');
-    col.appendChild(sounds);
-    col.appendChild(letters);
+    col.appendChild(phonics);
+    col.appendChild(match);
     col.appendChild(words);
-    col.appendChild(numbers);
     screen.appendChild(col);
+    screen.appendChild(homeLink('Back', goHome));
     app.appendChild(screen);
 }
 
@@ -527,7 +557,7 @@ function renderNumbersMenu() {
     col.appendChild(compare);
     col.appendChild(addition);
     screen.appendChild(col);
-    screen.appendChild(homeLink('Home', goHome));
+    screen.appendChild(homeLink('Back', goHome));
     app.appendChild(screen);
 }
 
@@ -537,7 +567,7 @@ function renderLetters() {
 
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
-        screen.appendChild(el('p', 'hint', 'You finished letters!'));
+        screen.appendChild(el('p', 'hint', 'You finished!'));
         const again = el('button', 'big-btn primary', 'Again');
         again.type = 'button';
         again.onclick = function () {
@@ -546,7 +576,7 @@ function renderLetters() {
             startLetterQuiz();
         };
         screen.appendChild(again);
-        screen.appendChild(homeLink());
+        screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
     }
@@ -575,7 +605,7 @@ function renderLetters() {
         row.appendChild(btn);
     });
     screen.appendChild(row);
-    screen.appendChild(homeLink());
+    screen.appendChild(homeLink('Back', goLettersMenu));
     app.appendChild(screen);
 }
 
@@ -692,7 +722,7 @@ function renderSounds() {
             startSounds();
         };
         screen.appendChild(again);
-        screen.appendChild(homeLink());
+        screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
     }
@@ -716,7 +746,7 @@ function renderSounds() {
         row.appendChild(btn);
     });
     screen.appendChild(row);
-    screen.appendChild(homeLink());
+    screen.appendChild(homeLink('Back', goLettersMenu));
     app.appendChild(screen);
 }
 
@@ -1107,7 +1137,7 @@ function renderWords() {
             startWords();
         };
         screen.appendChild(again);
-        screen.appendChild(homeLink());
+        screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
     }
@@ -1146,7 +1176,7 @@ function renderWords() {
         grid.appendChild(btn);
     });
     screen.appendChild(grid);
-    screen.appendChild(homeLink());
+    screen.appendChild(homeLink('Back', goLettersMenu));
     app.appendChild(screen);
 }
 
