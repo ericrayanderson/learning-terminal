@@ -1,5 +1,5 @@
 /**
- * Learning Terminal — Letters, Words, and Numbers practice
+ * Learning Terminal — Letters, Sounds, Words, and Numbers practice
  * Neon look, big simple choices.
  * Letter sounds: Buzzphonics (MIT)
  */
@@ -34,7 +34,7 @@ const NUMBER_WORDS = {
     6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'
 };
 
-// track: home | letters | words | numbers-menu | counting | addition | compare
+// track: home | letters | sounds | words | numbers-menu | counting | addition | compare
 // mode: QUIZ | PLAY | DONE
 let track = 'home';
 let mode = 'QUIZ';
@@ -45,6 +45,8 @@ let quizKind = 'SOUND';
 let coolingDown = false;
 let turnsLeft = 0;
 let turnsTotal = 8;
+let soundQueue = [];
+let soundPos = 0;
 
 // 3-letter words a young kid knows. Letters stay inside the phonics sound set.
 const WORDS = [
@@ -425,6 +427,7 @@ function render() {
     app.innerHTML = '';
     if (track === 'home') return renderHome();
     if (track === 'letters') return renderLetters();
+    if (track === 'sounds') return renderSounds();
     if (track === 'words') return renderWords();
     if (track === 'numbers-menu') return renderNumbersMenu();
     if (track === 'counting') return renderCounting();
@@ -445,6 +448,14 @@ function renderHome() {
         startLetterQuiz();
     };
 
+    const sounds = el('button', 'big-btn home-sounds home-choice');
+    sounds.type = 'button';
+    sounds.innerHTML = '<span class="home-icon">🔊</span><span>Sounds</span>';
+    sounds.onclick = function () {
+        unlockAudio();
+        startSounds();
+    };
+
     const words = el('button', 'big-btn home-words home-choice');
     words.type = 'button';
     words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>';
@@ -463,6 +474,7 @@ function renderHome() {
 
     const col = el('div', 'big-actions');
     col.appendChild(letters);
+    col.appendChild(sounds);
     col.appendChild(words);
     col.appendChild(numbers);
     screen.appendChild(col);
@@ -609,6 +621,110 @@ function onLetterQuiz(letter) {
     } else {
         wrongCooldown(function () {
             if (track !== 'letters') return;
+            playLetter(answer);
+        });
+    }
+}
+
+// ——— Sounds: hear the phonics sound, pick the letter ———
+function sameSoundFile(a, b) {
+    var ea = null;
+    var eb = null;
+    for (var i = 0; i < LETTERS.length; i++) {
+        if (LETTERS[i].letter === a) ea = LETTERS[i];
+        if (LETTERS[i].letter === b) eb = LETTERS[i];
+    }
+    return !!(ea && eb && ea.file === eb.file);
+}
+
+function startSounds() {
+    track = 'sounds';
+    coolingDown = false;
+    soundQueue = shuffle(LETTERS).slice(0, 8);
+    soundPos = 0;
+    nextSoundRound();
+}
+
+function nextSoundRound() {
+    stopSound();
+    if (soundPos >= soundQueue.length) {
+        mode = 'DONE';
+        render();
+        playYes();
+        return;
+    }
+    var item = soundQueue[soundPos];
+    quizAnswer = item.letter;
+    quizKind = 'SOUND';
+    var wrong = item.letter;
+    var guard = 0;
+    while ((wrong === item.letter || sameSoundFile(item.letter, wrong)) && guard < 80) {
+        wrong = LETTERS[Math.floor(Math.random() * LETTERS.length)].letter;
+        guard++;
+    }
+    quizOptions = shuffle([quizAnswer, wrong]);
+    mode = 'PLAY';
+    render();
+    // Inside the tap on the first round. Later rounds were primed on the answer tap.
+    playLetter(item);
+}
+
+function renderSounds() {
+    const screen = el('div', 'simple-screen');
+
+    if (mode === 'DONE') {
+        screen.appendChild(el('div', 'giant-emoji', '⭐'));
+        screen.appendChild(el('p', 'hint', 'Great job!'));
+        const again = el('button', 'big-btn primary', 'Again');
+        again.type = 'button';
+        again.onclick = function () {
+            unlockAudio();
+            startSounds();
+        };
+        screen.appendChild(again);
+        screen.appendChild(homeLink());
+        app.appendChild(screen);
+        return;
+    }
+
+    const answer = soundQueue[soundPos];
+    const prompt = el('button', 'letter-stage');
+    prompt.type = 'button';
+    prompt.innerHTML =
+        '<span class="stage-speaker">🔊</span>' +
+        '<span class="hint">Which letter?</span>';
+    prompt.onclick = function () {
+        if (!coolingDown) playLetter(answer);
+    };
+    screen.appendChild(prompt);
+
+    const row = el('div', 'big-actions row');
+    quizOptions.forEach(function (L) {
+        const btn = el('button', 'big-btn letter-choice', L);
+        btn.type = 'button';
+        btn.onclick = function () { onSoundPick(L); };
+        row.appendChild(btn);
+    });
+    screen.appendChild(row);
+    screen.appendChild(homeLink());
+    app.appendChild(screen);
+}
+
+function onSoundPick(letter) {
+    if (coolingDown) return;
+    var answer = soundQueue[soundPos];
+    if (letter === quizAnswer) {
+        stopSound();
+        playYes();
+        if (soundPos + 1 < soundQueue.length) primeLetter(soundQueue[soundPos + 1]);
+        flashYes(function () {
+            if (track !== 'sounds') return;
+            soundPos++;
+            nextSoundRound();
+        });
+    } else {
+        wrongCooldown(function () {
+            if (track !== 'sounds') return;
             playLetter(answer);
         });
     }
