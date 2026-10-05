@@ -399,6 +399,18 @@ function dotsHtml(n) {
     return html;
 }
 
+// 1 Easy, 2 Medium, 3 Harder. Stars stay in a font that actually draws them.
+function levelHtml(n) {
+    var names = { 1: 'Easy', 2: 'Medium', 3: 'Harder' };
+    var on = '';
+    var off = '';
+    for (var i = 1; i <= 3; i++) {
+        if (i <= n) on += '★';
+        else off += '☆';
+    }
+    return '<span class="home-level"><span class="stars-on">' + on + '</span><span class="stars-off">' + off + '</span> ' + names[n] + '</span>';
+}
+
 function homeLink(label, onClick) {
     const b = el('button', 'home-link', label || 'Home');
     b.type = 'button';
@@ -441,7 +453,7 @@ function renderHome() {
 
     const sounds = el('button', 'big-btn primary home-choice');
     sounds.type = 'button';
-    sounds.innerHTML = '<span class="home-icon">🔊</span><span>Sounds</span>';
+    sounds.innerHTML = '<span class="home-icon">🔊</span><span>Sounds</span>' + levelHtml(1);
     sounds.onclick = function () {
         unlockAudio();
         startSounds();
@@ -449,7 +461,7 @@ function renderHome() {
 
     const letters = el('button', 'big-btn home-letters home-choice');
     letters.type = 'button';
-    letters.innerHTML = '<span class="home-icon">Aa</span><span>Letters</span>';
+    letters.innerHTML = '<span class="home-icon">Aa</span><span>Letters</span>' + levelHtml(2);
     letters.onclick = function () {
         unlockAudio();
         track = 'letters';
@@ -458,7 +470,7 @@ function renderHome() {
 
     const words = el('button', 'big-btn home-words home-choice');
     words.type = 'button';
-    words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>';
+    words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>' + levelHtml(3);
     words.onclick = function () {
         unlockAudio();
         startWords();
@@ -466,7 +478,7 @@ function renderHome() {
 
     const numbers = el('button', 'big-btn home-numbers home-choice');
     numbers.type = 'button';
-    numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span>';
+    numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span><span class="home-level">Easy – Harder</span>';
     numbers.onclick = function () {
         unlockAudio();
         goNumbersMenu();
@@ -489,7 +501,7 @@ function renderNumbersMenu() {
 
     const counting = el('button', 'big-btn primary home-choice');
     counting.type = 'button';
-    counting.innerHTML = '<span class="home-icon">●●●</span><span>Counting</span>';
+    counting.innerHTML = '<span class="home-icon">●●●</span><span>Counting</span>' + levelHtml(1);
     counting.onclick = function () {
         unlockAudio();
         startCounting();
@@ -497,7 +509,7 @@ function renderNumbersMenu() {
 
     const addition = el('button', 'big-btn secondary home-choice');
     addition.type = 'button';
-    addition.innerHTML = '<span class="home-icon">+</span><span>Adding</span>';
+    addition.innerHTML = '<span class="home-icon">+</span><span>Adding</span>' + levelHtml(3);
     addition.onclick = function () {
         unlockAudio();
         startAddition();
@@ -505,17 +517,15 @@ function renderNumbersMenu() {
 
     const compare = el('button', 'big-btn secondary home-choice');
     compare.type = 'button';
-    compare.innerHTML = '<span class="home-icon">◇</span><span>Which more?</span>';
+    compare.innerHTML = '<span class="home-icon">◇</span><span>Which more?</span>' + levelHtml(2);
     compare.onclick = function () {
         unlockAudio();
         startCompare();
     };
 
     col.appendChild(counting);
-    col.appendChild(addition);
-    // Only two big buttons preferred — put compare as third? User said counting, addition, etc.
-    // Keep three options for numbers practice but stacked big.
     col.appendChild(compare);
+    col.appendChild(addition);
     screen.appendChild(col);
     screen.appendChild(homeLink('Home', goHome));
     app.appendChild(screen);

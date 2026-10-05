@@ -384,18 +384,42 @@ button:disabled { cursor: not-allowed; }
 
 /* Home choices */
 .home-choice {
-  min-height: 110px !important;
+  min-height: 108px !important;
   flex-direction: column !important;
-  gap: 10px !important;
-  font-size: 26px !important;
+  justify-content: center;
+  gap: 3px !important;
+  font-size: 24px !important;
+  padding: 12px 14px !important;
+  line-height: 1.05;
 }
 
 .home-icon {
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 900;
   letter-spacing: 0.06em;
   line-height: 1;
   opacity: 0.95;
+}
+
+.home-level {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  line-height: 1.15;
+  margin-top: 1px;
+}
+
+.home-level .stars-on,
+.home-level .stars-off {
+  font-family: system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.home-level .stars-off {
+  opacity: 0.4;
 }
 
 .home-link {
@@ -634,12 +658,13 @@ button:disabled { cursor: not-allowed; }
 
 @media (max-height: 640px) {
   .home-choice {
-    min-height: 78px !important;
-    padding: 10px 12px !important;
-    gap: 4px !important;
-    font-size: 22px !important;
+    min-height: 0 !important;
+    padding: 8px 12px !important;
+    gap: 2px !important;
+    font-size: 20px !important;
   }
-  .home-icon { font-size: 28px; }
+  .home-icon { font-size: 24px; }
+  .home-level { font-size: 12px; margin-top: 0; }
   .simple-screen { gap: 10px; }
   .word-screen { gap: 10px; }
   .letter-stage.word-stage { padding: 10px 10px 8px; }
