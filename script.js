@@ -439,21 +439,21 @@ function renderHome() {
     const screen = el('div', 'simple-screen');
     screen.appendChild(el('p', 'hint', 'Pick one'));
 
-    const letters = el('button', 'big-btn primary home-choice');
+    const sounds = el('button', 'big-btn primary home-choice');
+    sounds.type = 'button';
+    sounds.innerHTML = '<span class="home-icon">🔊</span><span>Sounds</span>';
+    sounds.onclick = function () {
+        unlockAudio();
+        startSounds();
+    };
+
+    const letters = el('button', 'big-btn home-letters home-choice');
     letters.type = 'button';
     letters.innerHTML = '<span class="home-icon">Aa</span><span>Letters</span>';
     letters.onclick = function () {
         unlockAudio();
         track = 'letters';
         startLetterQuiz();
-    };
-
-    const sounds = el('button', 'big-btn home-sounds home-choice');
-    sounds.type = 'button';
-    sounds.innerHTML = '<span class="home-icon">🔊</span><span>Sounds</span>';
-    sounds.onclick = function () {
-        unlockAudio();
-        startSounds();
     };
 
     const words = el('button', 'big-btn home-words home-choice');
@@ -473,8 +473,8 @@ function renderHome() {
     };
 
     const col = el('div', 'big-actions');
-    col.appendChild(letters);
     col.appendChild(sounds);
+    col.appendChild(letters);
     col.appendChild(words);
     col.appendChild(numbers);
     screen.appendChild(col);
