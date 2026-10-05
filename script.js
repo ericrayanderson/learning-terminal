@@ -820,9 +820,10 @@ function nextCountingRound() {
     quizAnswer = countItems;
     mode = 'PLAY';
     render();
-    // Auto-speak nothing yet; tap stage to count aloud
-    setTimeout(function () {
-        // gently say "how many?"
+    // Held in speechTimers so an answer tap cancels it. Otherwise this
+    // prompt speaks over the Yes / Try again card when the kid answers fast.
+    scheduleSpeech(function () {
+        if (track !== 'counting' || mode !== 'PLAY' || coolingDown) return;
         speak('how many?', { rate: 0.95 });
     }, 250);
 }
@@ -965,7 +966,9 @@ function nextAdditionRound() {
     quizOptions = shuffle(Array.from(opts));
     mode = 'PLAY';
     render();
-    setTimeout(function () {
+    // Held in speechTimers so an answer tap cancels it before feedback.
+    scheduleSpeech(function () {
+        if (track !== 'addition' || mode !== 'PLAY' || coolingDown) return;
         speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
     }, 280);
 }
@@ -1042,7 +1045,9 @@ function nextCompareRound() {
     quizAnswer = compareLeft > compareRight ? 'LEFT' : 'RIGHT';
     mode = 'PLAY';
     render();
-    setTimeout(function () {
+    // Held in speechTimers so an answer tap cancels it before feedback.
+    scheduleSpeech(function () {
+        if (track !== 'compare' || mode !== 'PLAY' || coolingDown) return;
         speak('which has more?', { rate: 0.95 });
     }, 250);
 }
