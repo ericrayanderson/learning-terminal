@@ -630,7 +630,7 @@ function renderNumbersMenu() {
 
     const compare = el('button', 'big-btn secondary home-choice');
     compare.type = 'button';
-    compare.innerHTML = '<span class="home-icon">◇</span><span>Which more?</span>' + levelHtml(2);
+    compare.innerHTML = '<span class="home-icon">◇</span><span>Which bigger?</span>' + levelHtml(2);
     compare.onclick = function () {
         unlockAudio();
         startCompare();
@@ -1121,7 +1121,7 @@ function onAddPick(n) {
     }
 }
 
-// ——— Which has more? ———
+// ——— Which is bigger? ———
 function startCompare() {
     track = 'compare';
     turnsTotal = questionCount;
@@ -1140,14 +1140,14 @@ function nextCompareRound() {
     // Held in speechTimers so an answer tap cancels it before feedback.
     scheduleSpeech(function () {
         if (track !== 'compare' || mode !== 'PLAY' || coolingDown) return;
-        speak('which has more?', { rate: 0.95 });
+        speak('which is bigger?', { rate: 0.95 });
     }, 250);
 }
 
 function renderCompare() {
     const screen = el('div', 'simple-screen');
     if (mode === 'DONE') {
-        return renderNumDone(screen, 'Which more?', startCompare);
+        return renderNumDone(screen, 'Which bigger?', startCompare);
     }
 
     const stage = el('div', 'letter-stage compare-stage');
@@ -1157,7 +1157,7 @@ function renderCompare() {
         '<div class="compare-vs">or</div>' +
         '<div class="compare-side">' + dotsHtml(compareRight) + '</div>' +
         '</div>' +
-        '<span class="hint">Which has more?</span>';
+        '<span class="hint">Which is bigger?</span>';
     screen.appendChild(stage);
 
     const row = el('div', 'big-actions row');
@@ -1193,7 +1193,7 @@ function onComparePick(side) {
         });
     } else {
         wrongCooldown(function () {
-            speak('which has more?', { rate: 0.95 });
+            speak('which is bigger?', { rate: 0.95 });
         });
     }
 }
