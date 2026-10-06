@@ -527,6 +527,36 @@ button:disabled { cursor: not-allowed; }
   text-underline-offset: 3px;
 }
 
+.question-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.question-label {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.question-select {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
+  background: var(--card);
+  border: 2px solid var(--stage-border);
+  border-radius: 10px;
+  padding: 4px 8px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
 /* Number dots */
 .dots {
   display: flex;

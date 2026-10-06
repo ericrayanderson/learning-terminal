@@ -44,7 +44,13 @@ let quizOptions = [];
 let quizKind = 'SOUND';
 let coolingDown = false;
 let turnsLeft = 0;
-let turnsTotal = 8;
+let turnsTotal = 10;
+// How many questions the next session plays. 5–25, remembered on the device.
+let questionCount = 10;
+// Letter Match counts down this many letters, then stops. The ordered set
+// still ends on its own if fewer than that are left.
+let lettersLeft = 0;
+let letterSetDone = false;
 let soundQueue = [];
 let soundPos = 0;
 
@@ -105,18 +111,26 @@ let mathB = 0;
 let compareLeft = 0;
 let compareRight = 0;
 
+function clampQuestions(n) {
+    var v = parseInt(n, 10);
+    if (v >= 5 && v <= 25) return v;
+    return 10;
+}
+
 function load() {
     try {
         const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
         if (typeof p.letterIndex === 'number') {
             index = Math.min(Math.max(0, p.letterIndex), LETTERS.length - 1);
         }
+        questionCount = clampQuestions(p.questionCount);
     } catch (e) { /* ignore */ }
 }
 
 function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        letterIndex: index
+        letterIndex: index,
+        questionCount: questionCount
     }));
 }
 
@@ -132,6 +146,7 @@ function clearStaleScores() {
         if (!('letterCorrect' in p) && !('letterIncorrect' in p)) return;
         const next = {};
         if (typeof p.letterIndex === 'number') next.letterIndex = p.letterIndex;
+        if (p.questionCount != null) next.questionCount = clampQuestions(p.questionCount);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch (e) { /* ignore */ }
 }
@@ -449,6 +464,42 @@ function homeLink(label, onClick) {
     return b;
 }
 
+// Enough rounds for a session. Past the end of a list, start another
+// shuffle, and don't ask the same item twice in a row.
+function takeRounds(list, n) {
+    var out = [];
+    var guard = 0;
+    while (out.length < n && guard < 8) {
+        var batch = shuffle(list);
+        if (out.length && batch.length > 1 && batch[0] === out[out.length - 1]) {
+            batch.push(batch.shift());
+        }
+        for (var i = 0; i < batch.length && out.length < n; i++) out.push(batch[i]);
+        guard++;
+    }
+    return out;
+}
+
+function questionsControl() {
+    const row = el('div', 'question-row');
+    row.appendChild(el('span', 'question-label', 'Questions'));
+    const sel = el('select', 'question-select');
+    sel.setAttribute('aria-label', 'Questions');
+    for (var n = 5; n <= 25; n++) {
+        const opt = el('option', '', String(n));
+        opt.value = String(n);
+        sel.appendChild(opt);
+    }
+    sel.value = String(questionCount);
+    sel.onchange = function () {
+        questionCount = clampQuestions(sel.value);
+        sel.value = String(questionCount);
+        save();
+    };
+    row.appendChild(sel);
+    return row;
+}
+
 function goHome() {
     letterWaitGen++;
     wordLocked = false;
@@ -535,7 +586,7 @@ function renderLettersMenu() {
     match.onclick = function () {
         unlockAudio();
         track = 'letters';
-        startLetterQuiz();
+        beginLetterSession();
     };
 
     const words = el('button', 'big-btn home-words home-choice');
@@ -550,6 +601,7 @@ function renderLettersMenu() {
     col.appendChild(match);
     col.appendChild(words);
     screen.appendChild(col);
+    screen.appendChild(questionsControl());
     screen.appendChild(homeLink('Back', goHome));
     app.appendChild(screen);
 }
@@ -588,6 +640,7 @@ function renderNumbersMenu() {
     col.appendChild(compare);
     col.appendChild(addition);
     screen.appendChild(col);
+    screen.appendChild(questionsControl());
     screen.appendChild(homeLink('Back', goHome));
     app.appendChild(screen);
 }
@@ -598,15 +651,18 @@ function renderLetters() {
 
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
-        screen.appendChild(el('p', 'hint', 'You finished!'));
+        screen.appendChild(el('p', 'hint', letterSetDone ? 'You finished!' : 'Great job!'));
         const again = el('button', 'big-btn primary', 'Again');
         again.type = 'button';
         again.onclick = function () {
-            index = 0;
-            save();
-            startLetterQuiz();
+            if (letterSetDone) {
+                index = 0;
+                save();
+            }
+            beginLetterSession();
         };
         screen.appendChild(again);
+        screen.appendChild(questionsControl());
         screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
@@ -640,9 +696,19 @@ function renderLetters() {
     app.appendChild(screen);
 }
 
+function beginLetterSession() {
+    lettersLeft = questionCount;
+    letterSetDone = false;
+    startLetterQuiz();
+}
+
 function advanceLetter(deferSound) {
     stopSound();
+    lettersLeft--;
+    // The ordered set ends here, even if this session still had questions left.
+    // The saved place stays on the last letter until Again starts over at S.
     if (index + 1 >= LETTERS.length) {
+        letterSetDone = true;
         mode = 'DONE';
         render();
         playYes();
@@ -650,6 +716,13 @@ function advanceLetter(deferSound) {
     }
     index++;
     save();
+    if (lettersLeft <= 0) {
+        letterSetDone = false;
+        mode = 'DONE';
+        render();
+        playYes();
+        return;
+    }
     startLetterQuiz(deferSound);
 }
 
@@ -720,7 +793,7 @@ function sameSoundFile(a, b) {
 function startSounds() {
     track = 'sounds';
     coolingDown = false;
-    soundQueue = shuffle(LETTERS).slice(0, 8);
+    soundQueue = takeRounds(LETTERS, questionCount);
     soundPos = 0;
     nextSoundRound();
 }
@@ -770,6 +843,7 @@ function renderSounds() {
             startSounds();
         };
         screen.appendChild(again);
+        screen.appendChild(questionsControl());
         screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
@@ -821,8 +895,8 @@ function onSoundPick(letter) {
 // ——— Counting practice ———
 function startCounting() {
     track = 'counting';
-    turnsTotal = 8;
-    turnsLeft = 8;
+    turnsTotal = questionCount;
+    turnsLeft = questionCount;
     nextCountingRound();
 }
 
@@ -962,8 +1036,8 @@ function onCountPick(n) {
 // ——— Addition ———
 function startAddition() {
     track = 'addition';
-    turnsTotal = 8;
-    turnsLeft = 8;
+    turnsTotal = questionCount;
+    turnsLeft = questionCount;
     nextAdditionRound();
 }
 
@@ -1050,8 +1124,8 @@ function onAddPick(n) {
 // ——— Which has more? ———
 function startCompare() {
     track = 'compare';
-    turnsTotal = 8;
-    turnsLeft = 8;
+    turnsTotal = questionCount;
+    turnsLeft = questionCount;
     nextCompareRound();
 }
 
@@ -1153,7 +1227,7 @@ function startWords() {
     wordLocked = false;
     track = 'words';
     coolingDown = false;
-    wordQueue = shuffle(WORDS).slice(0, 8);
+    wordQueue = takeRounds(WORDS, questionCount);
     wordPos = 0;
     nextWordRound();
 }
@@ -1198,6 +1272,7 @@ function renderWords() {
             startWords();
         };
         screen.appendChild(again);
+        screen.appendChild(questionsControl());
         screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
@@ -1302,6 +1377,7 @@ function renderNumDone(screen, title, againFn) {
     again.type = 'button';
     again.onclick = againFn;
     screen.appendChild(again);
+    screen.appendChild(questionsControl());
     const back = el('button', 'big-btn secondary', 'Numbers');
     back.type = 'button';
     back.onclick = goNumbersMenu;
