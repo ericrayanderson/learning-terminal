@@ -1,5 +1,5 @@
 /**
- * Learning Terminal — Letters (Phonics, Letter Match, Words) and Numbers practice
+ * Learning Terminal. Letters (Phonics, Words) and Numbers practice.
  * Neon look, big simple choices.
  * Letter sounds: Buzzphonics (MIT)
  */
@@ -34,23 +34,17 @@ const NUMBER_WORDS = {
     6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'
 };
 
-// track: home | letters-menu | letters | sounds | words | numbers-menu | counting | addition | compare
-// mode: QUIZ | PLAY | DONE
+// track: home | letters-menu | sounds | words | numbers-menu | counting | addition | compare
+// mode: PLAY | DONE
 let track = 'home';
-let mode = 'QUIZ';
-let index = 0;
+let mode = 'PLAY';
 let quizAnswer = null;
 let quizOptions = [];
-let quizKind = 'SOUND';
 let coolingDown = false;
 let turnsLeft = 0;
 let turnsTotal = 10;
 // How many questions the next session plays. 5–25, remembered on the device.
 let questionCount = 10;
-// Letter Match counts down this many letters, then stops. The ordered set
-// still ends on its own if fewer than that are left.
-let lettersLeft = 0;
-let letterSetDone = false;
 let soundQueue = [];
 let soundPos = 0;
 
@@ -123,27 +117,37 @@ function isMenuScreen(s) {
     return s === 'home' || s === 'letters-menu' || s === 'numbers-menu';
 }
 
+// Letter Match used to save its place as letterIndex, or as a screen id.
+// Those opens land on the Letters menu. letterIndex is not kept.
+function isLetterMatchScreen(s) {
+    return s === 'letters' || s === 'letter-match' || s === 'letterMatch';
+}
+
+function menuFromSave(p) {
+    if (!p || typeof p !== 'object') return 'home';
+    if (isLetterMatchScreen(p.screen)) return 'letters-menu';
+    if (isMenuScreen(p.screen)) return p.screen;
+    if (typeof p.letterIndex === 'number') return 'letters-menu';
+    return 'home';
+}
+
 function load() {
     try {
         const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        if (typeof p.letterIndex === 'number') {
-            index = Math.min(Math.max(0, p.letterIndex), LETTERS.length - 1);
-        }
         questionCount = clampQuestions(p.questionCount);
-        if (isMenuScreen(p.screen)) savedScreen = p.screen;
+        savedScreen = menuFromSave(p);
     } catch (e) { /* ignore */ }
 }
 
 function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        letterIndex: index,
         questionCount: questionCount,
         screen: savedScreen
     }));
 }
 
-// Scores lived in lt-scores-v1. Letter Match progress briefly also stored
-// letterCorrect and letterIncorrect. Drop both once; keep letterIndex.
+// Scores lived in lt-scores-v1. Letter Match also stored letterIndex, and
+// briefly letterCorrect / letterIncorrect. Drop those once.
 function clearStaleScores() {
     try { localStorage.removeItem('lt-scores-v1'); } catch (e) { /* ignore */ }
     try {
@@ -151,11 +155,12 @@ function clearStaleScores() {
         if (!raw) return;
         const p = JSON.parse(raw);
         if (!p || typeof p !== 'object') return;
-        if (!('letterCorrect' in p) && !('letterIncorrect' in p)) return;
+        var stale = ('letterCorrect' in p) || ('letterIncorrect' in p) ||
+            ('letterIndex' in p) || isLetterMatchScreen(p.screen);
+        if (!stale) return;
         const next = {};
-        if (typeof p.letterIndex === 'number') next.letterIndex = p.letterIndex;
         if (p.questionCount != null) next.questionCount = clampQuestions(p.questionCount);
-        if (isMenuScreen(p.screen)) next.screen = p.screen;
+        next.screen = menuFromSave(p);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch (e) { /* ignore */ }
 }
@@ -545,7 +550,6 @@ function render() {
     app.innerHTML = '';
     if (track === 'home') return renderHome();
     if (track === 'letters-menu') return renderLettersMenu();
-    if (track === 'letters') return renderLetters();
     if (track === 'sounds') return renderSounds();
     if (track === 'words') return renderWords();
     if (track === 'numbers-menu') return renderNumbersMenu();
@@ -564,7 +568,7 @@ function renderHome() {
 
     const letters = el('button', 'big-btn home-letters home-choice');
     letters.type = 'button';
-    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">3 games</span>';
+    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">2 games</span>';
     letters.onclick = function () {
         unlockAudio();
         goLettersMenu();
@@ -604,15 +608,6 @@ function renderLettersMenu() {
         startSounds();
     };
 
-    const match = el('button', 'big-btn home-letters home-choice');
-    match.type = 'button';
-    match.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letter Match</span>' + levelHtml(2);
-    match.onclick = function () {
-        unlockAudio();
-        track = 'letters';
-        beginLetterSession();
-    };
-
     const words = el('button', 'big-btn home-words home-choice');
     words.type = 'button';
     words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>' + levelHtml(3);
@@ -622,7 +617,6 @@ function renderLettersMenu() {
     };
 
     col.appendChild(phonics);
-    col.appendChild(match);
     col.appendChild(words);
     screen.appendChild(col);
     screen.appendChild(questionsControl());
@@ -669,141 +663,6 @@ function renderNumbersMenu() {
     app.appendChild(screen);
 }
 
-// ——— Letters ———
-function renderLetters() {
-    const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
-
-    if (mode === 'DONE') {
-        screen.appendChild(el('div', 'giant-emoji', '⭐'));
-        screen.appendChild(el('p', 'hint', letterSetDone ? 'You finished!' : 'Great job!'));
-        const again = el('button', 'big-btn primary', 'Again');
-        again.type = 'button';
-        again.onclick = function () {
-            if (letterSetDone) {
-                index = 0;
-                save();
-            }
-            beginLetterSession();
-        };
-        screen.appendChild(again);
-        screen.appendChild(questionsControl());
-        screen.appendChild(homeLink('Back', goLettersMenu));
-        app.appendChild(screen);
-        return;
-    }
-
-    const answer = LETTERS.find(function (L) { return L.letter === quizAnswer; });
-    const prompt = el('button', 'letter-stage' + (quizKind === 'SOUND' ? ' pulse' : ''));
-    prompt.type = 'button';
-    if (quizKind === 'PIC') {
-        prompt.innerHTML =
-            '<span class="stage-emoji">' + answer.emoji + '</span>' +
-            '<span class="hint">Which letter?</span>';
-    } else {
-        prompt.innerHTML =
-            '<span class="stage-speaker">🔊</span>' +
-            '<span class="hint tap-hear">Tap to hear</span>' +
-            '<span class="hint">Which letter?</span>';
-    }
-    prompt.onclick = function () {
-        if (!coolingDown) playLetter(answer);
-    };
-    screen.appendChild(prompt);
-    const row = el('div', 'big-actions row');
-    quizOptions.forEach(function (L) {
-        const btn = el('button', 'big-btn letter-choice', L);
-        btn.type = 'button';
-        btn.onclick = function () { onLetterQuiz(L); };
-        row.appendChild(btn);
-    });
-    screen.appendChild(row);
-    screen.appendChild(homeLink('Back', goLettersMenu));
-    app.appendChild(screen);
-}
-
-function beginLetterSession() {
-    lettersLeft = questionCount;
-    letterSetDone = false;
-    startLetterQuiz();
-}
-
-function advanceLetter(deferSound) {
-    stopSound();
-    lettersLeft--;
-    // The ordered set ends here, even if this session still had questions left.
-    // The saved place stays on the last letter until Again starts over at S.
-    if (index + 1 >= LETTERS.length) {
-        letterSetDone = true;
-        mode = 'DONE';
-        render();
-        playYes();
-        return;
-    }
-    index++;
-    save();
-    if (lettersLeft <= 0) {
-        letterSetDone = false;
-        mode = 'DONE';
-        render();
-        playYes();
-        return;
-    }
-    startLetterQuiz(deferSound);
-}
-
-function startLetterQuiz(deferSound) {
-    const item = LETTERS[index];
-    quizAnswer = item.letter;
-    quizKind = Math.random() < 0.65 ? 'PIC' : 'SOUND';
-    // First round is letter 0, so the pool still needs a second choice.
-    var pool = Math.min(Math.max(index, 1) + 1, LETTERS.length);
-    var wrong = item.letter;
-    var guard = 0;
-    while (
-        (wrong === item.letter ||
-            (item.letter === 'C' && wrong === 'K') ||
-            (item.letter === 'K' && wrong === 'C')) &&
-        guard < 40
-    ) {
-        wrong = LETTERS[Math.floor(Math.random() * pool)].letter;
-        guard++;
-    }
-    quizOptions = shuffle([quizAnswer, wrong]);
-    mode = 'QUIZ';
-    render();
-    // No intro timer. A delayed play() sits outside the tap, which mobile
-    // Safari blocks for the first clip. Later rounds were primed on the answer tap.
-    // After a Yes card, wait until that card is painted away and this question
-    // is on screen, then play. The first round still plays inside the tap.
-    if (deferSound) {
-        afterPaint(function () {
-            if (track !== 'letters' || mode !== 'QUIZ') return;
-            playLetter(item);
-        });
-    } else {
-        playLetter(item);
-    }
-}
-
-function onLetterQuiz(letter) {
-    if (coolingDown) return;
-    const answer = LETTERS.find(function (L) { return L.letter === quizAnswer; });
-    if (letter === quizAnswer) {
-        stopSound();
-        playYes();
-        if (index + 1 < LETTERS.length) primeLetter(LETTERS[index + 1]);
-        flashYes(function () {
-            if (track !== 'letters') return;
-            advanceLetter(true);
-        });
-    } else {
-        wrongCooldown(function () {
-            if (track !== 'letters') return;
-            playLetter(answer);
-        });
-    }
-}
-
 // ——— Sounds: hear the phonics sound, pick the letter ———
 function sameSoundFile(a, b) {
     var ea = null;
@@ -833,7 +692,6 @@ function nextSoundRound(deferSound) {
     }
     var item = soundQueue[soundPos];
     quizAnswer = item.letter;
-    quizKind = 'SOUND';
     var wrong = item.letter;
     var guard = 0;
     while ((wrong === item.letter || sameSoundFile(item.letter, wrong)) && guard < 80) {
@@ -1498,11 +1356,6 @@ function replayPrompt() {
         playLetter(soundQueue[soundPos]);
         return;
     }
-    if (track === 'letters' && mode === 'QUIZ') {
-        var heard = LETTERS.find(function (L) { return L.letter === quizAnswer; });
-        if (heard) playLetter(heard);
-        return;
-    }
     if (track === 'words' && mode === 'PLAY' && !wordLocked) {
         speakWord();
         return;
@@ -1562,7 +1415,7 @@ document.addEventListener('keydown', function (e) {
         return;
     }
     var inRound = mode !== 'DONE' && (
-        track === 'sounds' || track === 'letters' || track === 'words' ||
+        track === 'sounds' || track === 'words' ||
         track === 'counting' || track === 'addition' || track === 'compare'
     );
     if (!inRound) return;

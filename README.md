@@ -1,14 +1,20 @@
-# Letter Sounds · Arcade
+# Learning Terminal
 
 https://ericrayanderson.github.io/learning-terminal/
 
-80s arcade-styled phonics for little kids. Ultra-simple:
+Letter and number games for little kids.
 
-1. Giant letter + picture  
-2. **HEAR** — pure human letter sound  
-3. **NEXT** — next letter  
-4. Occasional quiz with two giant letters  
+Letters
 
-No menus. Progress saves in the browser.
+- Phonics: hear a letter sound, then pick the letter. Easy.
+- Words: spell a 3-letter word. Harder.
+
+Numbers
+
+- Counting
+- Which bigger?
+- Adding
+
+Choose how many questions to play. The last menu is remembered on this device.
 
 Letter sounds from [Buzzphonics](https://github.com/hellodeborahuk/buzzphonics) (MIT).
