@@ -110,11 +110,17 @@ let mathA = 0;
 let mathB = 0;
 let compareLeft = 0;
 let compareRight = 0;
+// Last menu to reopen after a reload. Never a mid-question screen.
+let savedScreen = 'home';
 
 function clampQuestions(n) {
     var v = parseInt(n, 10);
     if (v >= 5 && v <= 25) return v;
     return 10;
+}
+
+function isMenuScreen(s) {
+    return s === 'home' || s === 'letters-menu' || s === 'numbers-menu';
 }
 
 function load() {
@@ -124,13 +130,15 @@ function load() {
             index = Math.min(Math.max(0, p.letterIndex), LETTERS.length - 1);
         }
         questionCount = clampQuestions(p.questionCount);
+        if (isMenuScreen(p.screen)) savedScreen = p.screen;
     } catch (e) { /* ignore */ }
 }
 
 function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
         letterIndex: index,
-        questionCount: questionCount
+        questionCount: questionCount,
+        screen: savedScreen
     }));
 }
 
@@ -147,6 +155,7 @@ function clearStaleScores() {
         const next = {};
         if (typeof p.letterIndex === 'number') next.letterIndex = p.letterIndex;
         if (p.questionCount != null) next.questionCount = clampQuestions(p.questionCount);
+        if (isMenuScreen(p.screen)) next.screen = p.screen;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch (e) { /* ignore */ }
 }
@@ -505,7 +514,9 @@ function goHome() {
     wordLocked = false;
     stopSound();
     coolingDown = false;
+    savedScreen = 'home';
     track = 'home';
+    save();
     render();
 }
 
@@ -514,14 +525,18 @@ function goLettersMenu() {
     wordLocked = false;
     stopSound();
     coolingDown = false;
+    savedScreen = 'letters-menu';
     track = 'letters-menu';
+    save();
     render();
 }
 
 function goNumbersMenu() {
     stopSound();
     coolingDown = false;
+    savedScreen = 'numbers-menu';
     track = 'numbers-menu';
+    save();
     render();
 }
 
@@ -540,12 +555,16 @@ function render() {
 }
 
 function renderHome() {
-    const screen = el('div', 'simple-screen');
+    const screen = el('div', 'simple-screen home-screen');
+    const intro = el('div', 'site-intro wide-only');
+    intro.appendChild(el('h1', 'site-title', 'Letter and number games'));
+    intro.appendChild(el('p', 'site-sub', 'For little kids'));
+    screen.appendChild(intro);
     screen.appendChild(el('p', 'hint', 'Pick one'));
 
     const letters = el('button', 'big-btn home-letters home-choice');
     letters.type = 'button';
-    letters.innerHTML = '<span class="home-icon">Aa</span><span>Letters</span><span class="home-level">Easy – Harder</span>';
+    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">3 games</span>';
     letters.onclick = function () {
         unlockAudio();
         goLettersMenu();
@@ -553,7 +572,7 @@ function renderHome() {
 
     const numbers = el('button', 'big-btn home-numbers home-choice');
     numbers.type = 'button';
-    numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span><span class="home-level">Easy – Harder</span>';
+    numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span><span class="home-level">3 games</span>';
     numbers.onclick = function () {
         unlockAudio();
         goNumbersMenu();
@@ -563,11 +582,16 @@ function renderHome() {
     col.appendChild(letters);
     col.appendChild(numbers);
     screen.appendChild(col);
+    const credit = el('a', 'credit-link wide-only', 'Made by Eric');
+    credit.href = 'https://ericrayanderson.com';
+    credit.target = '_blank';
+    credit.rel = 'noopener noreferrer';
+    screen.appendChild(credit);
     app.appendChild(screen);
 }
 
 function renderLettersMenu() {
-    const screen = el('div', 'simple-screen');
+    const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', 'Letters'));
 
     const col = el('div', 'big-actions');
@@ -582,7 +606,7 @@ function renderLettersMenu() {
 
     const match = el('button', 'big-btn home-letters home-choice');
     match.type = 'button';
-    match.innerHTML = '<span class="home-icon">Aa</span><span>Letter Match</span>' + levelHtml(2);
+    match.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letter Match</span>' + levelHtml(2);
     match.onclick = function () {
         unlockAudio();
         track = 'letters';
@@ -607,7 +631,7 @@ function renderLettersMenu() {
 }
 
 function renderNumbersMenu() {
-    const screen = el('div', 'simple-screen');
+    const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', 'Numbers'));
 
     const col = el('div', 'big-actions');
@@ -647,7 +671,7 @@ function renderNumbersMenu() {
 
 // ——— Letters ———
 function renderLetters() {
-    const screen = el('div', 'simple-screen');
+    const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
 
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
@@ -669,7 +693,7 @@ function renderLetters() {
     }
 
     const answer = LETTERS.find(function (L) { return L.letter === quizAnswer; });
-    const prompt = el('button', 'letter-stage');
+    const prompt = el('button', 'letter-stage' + (quizKind === 'SOUND' ? ' pulse' : ''));
     prompt.type = 'button';
     if (quizKind === 'PIC') {
         prompt.innerHTML =
@@ -678,6 +702,7 @@ function renderLetters() {
     } else {
         prompt.innerHTML =
             '<span class="stage-speaker">🔊</span>' +
+            '<span class="hint tap-hear">Tap to hear</span>' +
             '<span class="hint">Which letter?</span>';
     }
     prompt.onclick = function () {
@@ -831,7 +856,7 @@ function nextSoundRound(deferSound) {
 }
 
 function renderSounds() {
-    const screen = el('div', 'simple-screen');
+    const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
 
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
@@ -850,10 +875,11 @@ function renderSounds() {
     }
 
     const answer = soundQueue[soundPos];
-    const prompt = el('button', 'letter-stage');
+    const prompt = el('button', 'letter-stage pulse');
     prompt.type = 'button';
     prompt.innerHTML =
         '<span class="stage-speaker">🔊</span>' +
+        '<span class="hint tap-hear">Tap to hear</span>' +
         '<span class="hint">Which letter?</span>';
     prompt.onclick = function () {
         if (!coolingDown) playLetter(answer);
@@ -921,7 +947,7 @@ function nextCountingRound() {
 }
 
 function renderCounting() {
-    const screen = el('div', 'simple-screen');
+    const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
 
     if (mode === 'DONE') {
         return renderNumDone(screen, 'Counting', startCounting);
@@ -1066,7 +1092,7 @@ function nextAdditionRound() {
 }
 
 function renderAddition() {
-    const screen = el('div', 'simple-screen');
+    const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
     if (mode === 'DONE') {
         return renderNumDone(screen, 'Adding', startAddition);
     }
@@ -1145,7 +1171,7 @@ function nextCompareRound() {
 }
 
 function renderCompare() {
-    const screen = el('div', 'simple-screen');
+    const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
     if (mode === 'DONE') {
         return renderNumDone(screen, 'Which bigger?', startCompare);
     }
@@ -1260,7 +1286,7 @@ function nextWordRound(deferSound) {
 }
 
 function renderWords() {
-    const screen = el('div', 'simple-screen word-screen');
+    const screen = el('div', 'simple-screen word-screen' + (mode === 'DONE' ? '' : ' play-screen'));
 
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
@@ -1466,10 +1492,109 @@ function blockTextGesture(e) {
     });
 })();
 
+function replayPrompt() {
+    if (coolingDown) return;
+    if (track === 'sounds' && mode === 'PLAY' && soundQueue[soundPos]) {
+        playLetter(soundQueue[soundPos]);
+        return;
+    }
+    if (track === 'letters' && mode === 'QUIZ') {
+        var heard = LETTERS.find(function (L) { return L.letter === quizAnswer; });
+        if (heard) playLetter(heard);
+        return;
+    }
+    if (track === 'words' && mode === 'PLAY' && !wordLocked) {
+        speakWord();
+        return;
+    }
+    if (track === 'counting' && mode === 'PLAY') {
+        countOutLoud(countItems);
+        return;
+    }
+    if (track === 'addition' && mode === 'PLAY') {
+        speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
+        return;
+    }
+    if (track === 'compare' && mode === 'PLAY') {
+        speak('which is bigger?', { rate: 0.95 });
+    }
+}
+
+function pressBack() {
+    var buttons = app.querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) {
+        var label = buttons[i].textContent.replace(/\s+/g, ' ').trim();
+        if (label === 'Back' || label === 'Numbers') {
+            buttons[i].click();
+            return;
+        }
+    }
+}
+
+function pickChoice(i) {
+    var buttons = Array.prototype.filter.call(app.querySelectorAll('.letter-choice'), function (b) {
+        return !b.disabled;
+    });
+    if (buttons.length !== 2 || !buttons[i]) return;
+    buttons[i].click();
+}
+
+function pickLetterKey(ch) {
+    var buttons = app.querySelectorAll('.letter-choice, .word-tile');
+    for (var i = 0; i < buttons.length; i++) {
+        if (buttons[i].disabled) continue;
+        if (buttons[i].textContent.replace(/\s+/g, '').toUpperCase() === ch) {
+            buttons[i].click();
+            return;
+        }
+    }
+}
+
+// Laptop and wide windows. A phone-sized window keeps tap behavior only.
+var wideKeys = window.matchMedia('(min-width: 700px)');
+document.addEventListener('keydown', function (e) {
+    if (!wideKeys.matches || e.repeat) return;
+    if (isTextField(e.target)) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        pressBack();
+        return;
+    }
+    var inRound = mode !== 'DONE' && (
+        track === 'sounds' || track === 'letters' || track === 'words' ||
+        track === 'counting' || track === 'addition' || track === 'compare'
+    );
+    if (!inRound) return;
+    if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        replayPrompt();
+        return;
+    }
+    if (coolingDown) {
+        e.preventDefault();
+        return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === '1') {
+        e.preventDefault();
+        pickChoice(0);
+        return;
+    }
+    if (e.key === 'ArrowRight' || e.key === '2') {
+        e.preventDefault();
+        pickChoice(1);
+        return;
+    }
+    if (/^[a-zA-Z]$/.test(e.key)) {
+        e.preventDefault();
+        pickLetterKey(e.key.toUpperCase());
+    }
+});
+
 function boot() {
     clearStaleScores();
     load();
-    track = 'home';
+    track = savedScreen;
     LETTERS.slice(0, 8).forEach(function (L) {
         const url = './sounds/' + L.file + '.m4a';
         if (!audioCache.has(url)) {
