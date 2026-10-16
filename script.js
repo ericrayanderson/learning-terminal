@@ -507,6 +507,13 @@ function takeRounds(list, n) {
     return out;
 }
 
+function selectWrap(sel) {
+    const wrap = el('div', 'select-wrap');
+    wrap.appendChild(sel);
+    wrap.appendChild(el('span', 'select-chevron'));
+    return wrap;
+}
+
 function questionsControl() {
     const row = el('div', 'question-row');
     row.appendChild(el('span', 'question-label', 'Questions'));
@@ -523,7 +530,7 @@ function questionsControl() {
         sel.value = String(questionCount);
         save();
     };
-    row.appendChild(sel);
+    row.appendChild(selectWrap(sel));
     return row;
 }
 
@@ -543,8 +550,15 @@ function addMaxControl() {
         sel.value = String(addMax);
         save();
     };
-    row.appendChild(sel);
+    row.appendChild(selectWrap(sel));
     return row;
+}
+
+function settingsCard(withAddMax) {
+    const card = el('div', 'settings-card');
+    card.appendChild(questionsControl());
+    if (withAddMax) card.appendChild(addMaxControl());
+    return card;
 }
 
 function goHome() {
@@ -630,6 +644,7 @@ function renderHome() {
 function renderLettersMenu() {
     const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', 'Letters'));
+    screen.appendChild(settingsCard(false));
 
     const col = el('div', 'big-actions');
 
@@ -652,7 +667,6 @@ function renderLettersMenu() {
     col.appendChild(phonics);
     col.appendChild(words);
     screen.appendChild(col);
-    screen.appendChild(questionsControl());
     screen.appendChild(homeLink('Back', goHome));
     app.appendChild(screen);
 }
@@ -660,6 +674,7 @@ function renderLettersMenu() {
 function renderNumbersMenu() {
     const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', 'Numbers'));
+    screen.appendChild(settingsCard(true));
 
     const col = el('div', 'big-actions');
 
@@ -691,8 +706,6 @@ function renderNumbersMenu() {
     col.appendChild(compare);
     col.appendChild(addition);
     screen.appendChild(col);
-    screen.appendChild(questionsControl());
-    screen.appendChild(addMaxControl());
     screen.appendChild(homeLink('Back', goHome));
     app.appendChild(screen);
 }
@@ -753,6 +766,7 @@ function renderSounds() {
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
         screen.appendChild(el('p', 'hint', 'Great job!'));
+        screen.appendChild(settingsCard(false));
         const again = el('button', 'big-btn primary', 'Again');
         again.type = 'button';
         again.onclick = function () {
@@ -760,7 +774,6 @@ function renderSounds() {
             startSounds();
         };
         screen.appendChild(again);
-        screen.appendChild(questionsControl());
         screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
@@ -1191,6 +1204,7 @@ function renderWords() {
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
         screen.appendChild(el('p', 'hint', 'Great job!'));
+        screen.appendChild(settingsCard(false));
         const again = el('button', 'big-btn primary', 'Again');
         again.type = 'button';
         again.onclick = function () {
@@ -1198,7 +1212,6 @@ function renderWords() {
             startWords();
         };
         screen.appendChild(again);
-        screen.appendChild(questionsControl());
         screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
@@ -1299,12 +1312,11 @@ function checkWord() {
 function renderNumDone(screen, title, againFn) {
     screen.appendChild(el('div', 'giant-emoji', '⭐'));
     screen.appendChild(el('p', 'hint', 'Great job!'));
+    screen.appendChild(settingsCard(title === 'Adding'));
     const again = el('button', 'big-btn primary', 'Again');
     again.type = 'button';
     again.onclick = againFn;
     screen.appendChild(again);
-    screen.appendChild(questionsControl());
-    if (title === 'Adding') screen.appendChild(addMaxControl());
     const back = el('button', 'big-btn secondary', 'Numbers');
     back.type = 'button';
     back.onclick = goNumbersMenu;
