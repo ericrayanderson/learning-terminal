@@ -31,7 +31,9 @@ const LETTERS = [
 
 const NUMBER_WORDS = {
     1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
-    6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'
+    6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten',
+    11: 'eleven', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen',
+    16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty'
 };
 
 // track: home | letters-menu | sounds | words | numbers-menu | counting | addition | compare
@@ -45,6 +47,8 @@ let turnsLeft = 0;
 let turnsTotal = 10;
 // How many questions the next session plays. 5–25, remembered on the device.
 let questionCount = 10;
+// Biggest sum Adding will ask. 8 is the original 1-4 plus 1-4 cap.
+let addMax = 8;
 let soundQueue = [];
 let soundPos = 0;
 
@@ -113,6 +117,12 @@ function clampQuestions(n) {
     return 10;
 }
 
+function clampAddMax(n) {
+    var v = parseInt(n, 10);
+    if (v >= 5 && v <= 20) return v;
+    return 8;
+}
+
 function isMenuScreen(s) {
     return s === 'home' || s === 'letters-menu' || s === 'numbers-menu';
 }
@@ -135,6 +145,7 @@ function load() {
     try {
         const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
         questionCount = clampQuestions(p.questionCount);
+        addMax = clampAddMax(p.addMax);
         savedScreen = menuFromSave(p);
     } catch (e) { /* ignore */ }
 }
@@ -142,6 +153,7 @@ function load() {
 function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
         questionCount: questionCount,
+        addMax: addMax,
         screen: savedScreen
     }));
 }
@@ -160,6 +172,7 @@ function clearStaleScores() {
         if (!stale) return;
         const next = {};
         if (p.questionCount != null) next.questionCount = clampQuestions(p.questionCount);
+        if (p.addMax != null) next.addMax = clampAddMax(p.addMax);
         next.screen = menuFromSave(p);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch (e) { /* ignore */ }
@@ -453,7 +466,7 @@ function shuffle(a) {
 }
 
 function dotsHtml(n) {
-    var html = '<span class="dots">';
+    var html = '<span class="dots' + (n > 8 ? ' dots-pack' : '') + '">';
     for (var i = 0; i < n; i++) html += '<span class="dot"></span>';
     html += '</span>';
     return html;
@@ -508,6 +521,26 @@ function questionsControl() {
     sel.onchange = function () {
         questionCount = clampQuestions(sel.value);
         sel.value = String(questionCount);
+        save();
+    };
+    row.appendChild(sel);
+    return row;
+}
+
+function addMaxControl() {
+    const row = el('div', 'question-row');
+    row.appendChild(el('span', 'question-label', 'Adding up to'));
+    const sel = el('select', 'question-select add-max-select');
+    sel.setAttribute('aria-label', 'Adding up to');
+    for (var n = 5; n <= 20; n++) {
+        const opt = el('option', '', String(n));
+        opt.value = String(n);
+        sel.appendChild(opt);
+    }
+    sel.value = String(addMax);
+    sel.onchange = function () {
+        addMax = clampAddMax(sel.value);
+        sel.value = String(addMax);
         save();
     };
     row.appendChild(sel);
@@ -659,6 +692,7 @@ function renderNumbersMenu() {
     col.appendChild(addition);
     screen.appendChild(col);
     screen.appendChild(questionsControl());
+    screen.appendChild(addMaxControl());
     screen.appendChild(homeLink('Back', goHome));
     app.appendChild(screen);
 }
@@ -925,19 +959,27 @@ function startAddition() {
     nextAdditionRound();
 }
 
-function nextAdditionRound() {
-    // Small addends for age 4: 1–4 + 1–4, sum ≤ 8
-    mathA = Math.floor(Math.random() * 4) + 1;
-    mathB = Math.floor(Math.random() * 4) + 1;
-    while (mathA + mathB > 8) {
-        mathA = Math.floor(Math.random() * 4) + 1;
-        mathB = Math.floor(Math.random() * 4) + 1;
+function pickAddends(maxSum) {
+    // The original game rolls two numbers from 1 to 4. Their sum is at most 8.
+    if (maxSum === 8) {
+        return [
+            Math.floor(Math.random() * 4) + 1,
+            Math.floor(Math.random() * 4) + 1
+        ];
     }
+    var sum = Math.floor(Math.random() * (maxSum - 1)) + 2;
+    var a = Math.floor(Math.random() * (sum - 1)) + 1;
+    return [a, sum - a];
+}
+
+function nextAdditionRound() {
+    var pair = pickAddends(addMax);
+    mathA = pair[0];
+    mathB = pair[1];
     quizAnswer = mathA + mathB;
     const opts = new Set([quizAnswer]);
     while (opts.size < 2) {
-        var r = Math.floor(Math.random() * 8) + 1;
-        opts.add(r);
+        opts.add(Math.floor(Math.random() * addMax) + 1);
     }
     quizOptions = shuffle(Array.from(opts));
     mode = 'PLAY';
@@ -972,7 +1014,7 @@ function renderAddition() {
 
     const row = el('div', 'big-actions row');
     quizOptions.forEach(function (opt) {
-        const btn = el('button', 'big-btn letter-choice', String(opt));
+        const btn = el('button', 'big-btn letter-choice' + (String(opt).length > 1 ? ' two-digit' : ''), String(opt));
         btn.type = 'button';
         btn.onclick = function () { onAddPick(opt); };
         row.appendChild(btn);
@@ -1262,6 +1304,7 @@ function renderNumDone(screen, title, againFn) {
     again.onclick = againFn;
     screen.appendChild(again);
     screen.appendChild(questionsControl());
+    if (title === 'Adding') screen.appendChild(addMaxControl());
     const back = el('button', 'big-btn secondary', 'Numbers');
     back.type = 'button';
     back.onclick = goNumbersMenu;
