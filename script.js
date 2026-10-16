@@ -674,7 +674,7 @@ function renderLettersMenu() {
 function renderNumbersMenu() {
     const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', 'Numbers'));
-    screen.appendChild(settingsCard(true));
+    screen.appendChild(settingsCard(false));
 
     const col = el('div', 'big-actions');
 
@@ -690,8 +690,7 @@ function renderNumbersMenu() {
     addition.type = 'button';
     addition.innerHTML = '<span class="home-icon">+</span><span>Adding</span>' + levelHtml(3);
     addition.onclick = function () {
-        unlockAudio();
-        startAddition();
+        showAdditionStart();
     };
 
     const compare = el('button', 'big-btn secondary home-choice');
@@ -965,11 +964,34 @@ function onCountPick(n) {
 }
 
 // ——— Addition ———
+function showAdditionStart() {
+    track = 'addition';
+    mode = 'READY';
+    stopSound();
+    coolingDown = false;
+    render();
+}
+
 function startAddition() {
     track = 'addition';
     turnsTotal = questionCount;
     turnsLeft = questionCount;
     nextAdditionRound();
+}
+
+function renderAdditionStart() {
+    const screen = el('div', 'simple-screen menu-screen');
+    screen.appendChild(el('p', 'hint', 'Adding'));
+    screen.appendChild(settingsCard(true));
+    const start = el('button', 'big-btn primary', 'Start');
+    start.type = 'button';
+    start.onclick = function () {
+        unlockAudio();
+        startAddition();
+    };
+    screen.appendChild(start);
+    screen.appendChild(homeLink('Back', goNumbersMenu));
+    app.appendChild(screen);
 }
 
 function pickAddends(maxSum) {
@@ -1005,6 +1027,7 @@ function nextAdditionRound() {
 }
 
 function renderAddition() {
+    if (mode === 'READY') return renderAdditionStart();
     const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
     if (mode === 'DONE') {
         return renderNumDone(screen, 'Adding', startAddition);
@@ -1469,7 +1492,7 @@ document.addEventListener('keydown', function (e) {
         pressBack();
         return;
     }
-    var inRound = mode !== 'DONE' && (
+    var inRound = mode !== 'DONE' && mode !== 'READY' && (
         track === 'sounds' || track === 'words' ||
         track === 'counting' || track === 'addition' || track === 'compare'
     );
