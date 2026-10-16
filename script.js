@@ -37,7 +37,7 @@ const NUMBER_WORDS = {
 };
 
 // track: home | letters-menu | sounds | words | numbers-menu | counting | addition | compare
-// mode: PLAY | DONE
+// mode: PLAY | DONE | READY (start screen, not saved)
 let track = 'home';
 let mode = 'PLAY';
 let quizAnswer = null;
@@ -566,6 +566,7 @@ function goHome() {
     wordLocked = false;
     stopSound();
     coolingDown = false;
+    mode = 'PLAY';
     savedScreen = 'home';
     track = 'home';
     save();
@@ -577,6 +578,7 @@ function goLettersMenu() {
     wordLocked = false;
     stopSound();
     coolingDown = false;
+    mode = 'PLAY';
     savedScreen = 'letters-menu';
     track = 'letters-menu';
     save();
@@ -586,6 +588,7 @@ function goLettersMenu() {
 function goNumbersMenu() {
     stopSound();
     coolingDown = false;
+    mode = 'PLAY';
     savedScreen = 'numbers-menu';
     track = 'numbers-menu';
     save();
@@ -593,8 +596,43 @@ function goNumbersMenu() {
 }
 
 // ——— Render ———
+let startTitle = '';
+let startBegin = null;
+let startBack = null;
+let startWithAdd = false;
+
+function showGameStart(trackId, title, begin, back, withAddMax) {
+    track = trackId;
+    mode = 'READY';
+    startTitle = title;
+    startBegin = begin;
+    startBack = back;
+    startWithAdd = !!withAddMax;
+    stopSound();
+    coolingDown = false;
+    render();
+}
+
+function renderGameStart() {
+    const screen = el('div', 'simple-screen menu-screen');
+    screen.appendChild(el('p', 'hint', startTitle));
+    screen.appendChild(settingsCard(startWithAdd));
+    const start = el('button', 'big-btn primary', 'Start');
+    start.type = 'button';
+    start.onclick = function () {
+        unlockAudio();
+        startBegin();
+    };
+    screen.appendChild(start);
+    screen.appendChild(homeLink('Back', startBack));
+    app.appendChild(screen);
+}
+
 function render() {
     app.innerHTML = '';
+    if (mode === 'READY' && (track === 'sounds' || track === 'words' || track === 'counting' || track === 'addition' || track === 'compare')) {
+        return renderGameStart();
+    }
     if (track === 'home') return renderHome();
     if (track === 'letters-menu') return renderLettersMenu();
     if (track === 'sounds') return renderSounds();
@@ -644,7 +682,6 @@ function renderHome() {
 function renderLettersMenu() {
     const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', 'Letters'));
-    screen.appendChild(settingsCard(false));
 
     const col = el('div', 'big-actions');
 
@@ -652,16 +689,14 @@ function renderLettersMenu() {
     phonics.type = 'button';
     phonics.innerHTML = '<span class="home-icon">🔊</span><span>Phonics</span>' + levelHtml(1);
     phonics.onclick = function () {
-        unlockAudio();
-        startSounds();
+        showGameStart('sounds', 'Phonics', startSounds, goLettersMenu, false);
     };
 
     const words = el('button', 'big-btn home-words home-choice');
     words.type = 'button';
     words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>' + levelHtml(3);
     words.onclick = function () {
-        unlockAudio();
-        startWords();
+        showGameStart('words', 'Words', startWords, goLettersMenu, false);
     };
 
     col.appendChild(phonics);
@@ -674,7 +709,6 @@ function renderLettersMenu() {
 function renderNumbersMenu() {
     const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', 'Numbers'));
-    screen.appendChild(settingsCard(false));
 
     const col = el('div', 'big-actions');
 
@@ -682,23 +716,21 @@ function renderNumbersMenu() {
     counting.type = 'button';
     counting.innerHTML = '<span class="home-icon">●●●</span><span>Counting</span>' + levelHtml(1);
     counting.onclick = function () {
-        unlockAudio();
-        startCounting();
+        showGameStart('counting', 'Counting', startCounting, goNumbersMenu, false);
     };
 
     const addition = el('button', 'big-btn secondary home-choice');
     addition.type = 'button';
     addition.innerHTML = '<span class="home-icon">+</span><span>Adding</span>' + levelHtml(3);
     addition.onclick = function () {
-        showAdditionStart();
+        showGameStart('addition', 'Adding', startAddition, goNumbersMenu, true);
     };
 
     const compare = el('button', 'big-btn secondary home-choice');
     compare.type = 'button';
     compare.innerHTML = '<span class="home-icon">◇</span><span>Which bigger?</span>' + levelHtml(2);
     compare.onclick = function () {
-        unlockAudio();
-        startCompare();
+        showGameStart('compare', 'Which bigger?', startCompare, goNumbersMenu, false);
     };
 
     col.appendChild(counting);
@@ -964,34 +996,11 @@ function onCountPick(n) {
 }
 
 // ——— Addition ———
-function showAdditionStart() {
-    track = 'addition';
-    mode = 'READY';
-    stopSound();
-    coolingDown = false;
-    render();
-}
-
 function startAddition() {
     track = 'addition';
     turnsTotal = questionCount;
     turnsLeft = questionCount;
     nextAdditionRound();
-}
-
-function renderAdditionStart() {
-    const screen = el('div', 'simple-screen menu-screen');
-    screen.appendChild(el('p', 'hint', 'Adding'));
-    screen.appendChild(settingsCard(true));
-    const start = el('button', 'big-btn primary', 'Start');
-    start.type = 'button';
-    start.onclick = function () {
-        unlockAudio();
-        startAddition();
-    };
-    screen.appendChild(start);
-    screen.appendChild(homeLink('Back', goNumbersMenu));
-    app.appendChild(screen);
 }
 
 function pickAddends(maxSum) {
@@ -1027,7 +1036,6 @@ function nextAdditionRound() {
 }
 
 function renderAddition() {
-    if (mode === 'READY') return renderAdditionStart();
     const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
     if (mode === 'DONE') {
         return renderNumDone(screen, 'Adding', startAddition);
@@ -1490,6 +1498,17 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         e.preventDefault();
         pressBack();
+        return;
+    }
+    if (mode === 'READY' && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        var starters = app.querySelectorAll('button');
+        for (var s = 0; s < starters.length; s++) {
+            if (starters[s].textContent.replace(/\s+/g, ' ').trim() === 'Start') {
+                starters[s].click();
+                return;
+            }
+        }
         return;
     }
     var inRound = mode !== 'DONE' && mode !== 'READY' && (
