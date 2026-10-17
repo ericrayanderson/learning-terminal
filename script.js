@@ -245,6 +245,8 @@ function stopSound() {
     speechTimers.forEach(function (id) { clearTimeout(id); });
     speechTimers = [];
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    lionTalkToken++;
+    setLionPose('');
 }
 
 // Bumped on every speak so a cancelled utterance cannot mark the new one finished.
@@ -316,6 +318,7 @@ function playLetter(entry) {
     var pending = a.play();
     a._lastPlay = pending;
     if (pending && typeof pending.catch === 'function') pending.catch(function () {});
+    if (track === 'type') lionTalk(a);
     return a;
 }
 
@@ -567,6 +570,7 @@ function goHome() {
     stopSound();
     coolingDown = false;
     setTypedLetter('');
+    setLionPose('');
     mode = 'PLAY';
     savedScreen = 'home';
     track = 'home';
@@ -580,6 +584,7 @@ function goLettersMenu() {
     stopSound();
     coolingDown = false;
     setTypedLetter('');
+    setLionPose('');
     mode = 'PLAY';
     savedScreen = 'letters-menu';
     track = 'letters-menu';
@@ -591,6 +596,7 @@ function goNumbersMenu() {
     stopSound();
     coolingDown = false;
     setTypedLetter('');
+    setLionPose('');
     mode = 'PLAY';
     savedScreen = 'numbers-menu';
     track = 'numbers-menu';
@@ -891,6 +897,97 @@ function setTypedLetter(ch) {
     }
 }
 
+// Original round lion. The stage one "says" the letter. The card one
+// shows the happy or tilted pose while Yes / Try again covers the stage.
+function lionSvg() {
+    return '' +
+        '<svg class="lion-svg" viewBox="0 0 160 176" aria-hidden="true">' +
+            '<ellipse class="lion-paw" cx="62" cy="160" rx="18" ry="11"/>' +
+            '<ellipse class="lion-paw" cx="98" cy="160" rx="18" ry="11"/>' +
+            '<g class="lion-head">' +
+                '<circle class="lion-ear" cx="46" cy="54" r="14"/>' +
+                '<circle class="lion-ear" cx="114" cy="54" r="14"/>' +
+                '<circle class="lion-ear-in" cx="46" cy="54" r="7"/>' +
+                '<circle class="lion-ear-in" cx="114" cy="54" r="7"/>' +
+                '<circle class="lion-mane" cx="80" cy="96" r="48"/>' +
+                '<circle class="lion-mane" cx="36" cy="78" r="14"/>' +
+                '<circle class="lion-mane" cx="124" cy="78" r="14"/>' +
+                '<circle class="lion-mane" cx="44" cy="124" r="13"/>' +
+                '<circle class="lion-mane" cx="116" cy="124" r="13"/>' +
+                '<circle class="lion-face" cx="80" cy="100" r="34"/>' +
+                '<circle class="lion-shine" cx="66" cy="84" r="6"/>' +
+                '<circle class="lion-cheek" cx="54" cy="110" r="6"/>' +
+                '<circle class="lion-cheek" cx="106" cy="110" r="6"/>' +
+                '<g class="lion-eyes-open">' +
+                    '<circle class="lion-eye" cx="67" cy="96" r="6"/>' +
+                    '<circle class="lion-eye" cx="93" cy="96" r="6"/>' +
+                    '<circle class="lion-eye-shine" cx="69" cy="94" r="2"/>' +
+                    '<circle class="lion-eye-shine" cx="95" cy="94" r="2"/>' +
+                '</g>' +
+                '<g class="lion-eyes-happy">' +
+                    '<path d="M59 96 q8 -11 16 0"/>' +
+                    '<path d="M85 96 q8 -11 16 0"/>' +
+                '</g>' +
+                '<ellipse class="lion-nose" cx="80" cy="110" rx="7" ry="5"/>' +
+                '<path class="lion-mouth-rest" d="M68 118 q12 10 24 0"/>' +
+                '<path class="lion-mouth-happy" d="M62 116 q18 16 36 0"/>' +
+                '<ellipse class="lion-mouth-open" cx="80" cy="122" rx="9" ry="7"/>' +
+            '</g>' +
+        '</svg>';
+}
+
+function lionMarkup(extra) {
+    return '<span class="lion' + (extra ? ' ' + extra : '') + '">' + lionSvg() + '</span>';
+}
+
+function ensureFeedbackLions() {
+    [yesOverlay, noOverlay].forEach(function (ov) {
+        if (!ov || ov.querySelector('.feedback-lion')) return;
+        var node = el('div', 'lion feedback-lion hidden');
+        node.setAttribute('aria-hidden', 'true');
+        node.innerHTML = lionSvg();
+        var emoji = ov.querySelector('.feedback-emoji');
+        if (emoji) emoji.insertAdjacentElement('afterend', node);
+    });
+}
+
+var lionTalkToken = 0;
+
+function setLionPose(pose) {
+    var nodes = document.querySelectorAll('.lion');
+    for (var i = 0; i < nodes.length; i++) {
+        nodes[i].classList.remove('lion-talk', 'lion-happy', 'lion-tilt');
+        if (pose) nodes[i].classList.add(pose);
+        if (!nodes[i].classList.contains('feedback-lion')) continue;
+        var show = pose === 'lion-happy' || pose === 'lion-tilt';
+        nodes[i].classList.toggle('hidden', !show);
+        var emoji = nodes[i].parentNode && nodes[i].parentNode.querySelector('.feedback-emoji');
+        if (emoji) emoji.classList.toggle('hidden', show);
+    }
+}
+
+function lionTalk(audio) {
+    if (!audio || audio.muted || track !== 'type') return;
+    var token = ++lionTalkToken;
+    setLionPose('lion-talk');
+    var target = letterHeardTarget(audio) || 0.9;
+    var started = Date.now();
+    var poll = setInterval(function () {
+        if (token !== lionTalkToken) {
+            clearInterval(poll);
+            return;
+        }
+        var heard = audio.ended || (audio.currentTime > 0 && audio.currentTime >= target);
+        var stalled = Date.now() - started > 2500;
+        if (heard || stalled || currentAudio !== audio) {
+            clearInterval(poll);
+            if (token !== lionTalkToken) return;
+            var lion = document.querySelector('.type-stage .lion');
+            if (lion && lion.classList.contains('lion-talk')) setLionPose('');
+        }
+    }, 40);
+}
+
 function startType() {
     track = 'type';
     coolingDown = false;
@@ -941,13 +1038,15 @@ function renderType() {
     }
 
     const answer = soundQueue[soundPos];
-    const prompt = el('button', 'letter-stage pulse');
+    const prompt = el('button', 'letter-stage type-stage pulse');
     prompt.type = 'button';
     prompt.innerHTML =
-        '<span class="stage-speaker">🔊</span>' +
-        '<span class="hint tap-hear">Tap to hear</span>' +
-        '<span class="hint">Type the letter</span>' +
-        '<span class="giant-letter typed-letter hidden"></span>';
+        lionMarkup() +
+        '<span class="speech-bubble">' +
+            '<span class="hint tap-hear">Tap to hear</span>' +
+            '<span class="hint">Type the letter</span>' +
+            '<span class="giant-letter typed-letter hidden"></span>' +
+        '</span>';
     prompt.onclick = function () {
         if (!coolingDown) playLetter(answer);
     };
@@ -965,8 +1064,10 @@ function onTypeLetter(ch) {
         stopSound();
         playYes();
         if (soundPos + 1 < soundQueue.length) primeLetter(soundQueue[soundPos + 1]);
+        setLionPose('lion-happy');
         flashYes(function () {
             setTypedLetter('');
+            setLionPose('');
             if (track !== 'type') return;
             soundPos++;
             nextTypeRound(true);
@@ -977,6 +1078,7 @@ function onTypeLetter(ch) {
             if (track !== 'type') return;
             playLetter(answer);
         });
+        setLionPose('lion-tilt');
     }
 }
 
@@ -1706,6 +1808,7 @@ document.addEventListener('keydown', function (e) {
 });
 
 function boot() {
+    ensureFeedbackLions();
     clearStaleScores();
     load();
     track = savedScreen;

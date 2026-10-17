@@ -710,6 +710,173 @@ button:disabled { cursor: not-allowed; }
   text-shadow: var(--letter-shadow);
 }
 
+/* Type it: the lion says the letter. Original shapes, no borrowed art. */
+.letter-stage.type-stage {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 14px;
+  overflow: visible;
+}
+
+.type-stage .lion {
+  flex: 0 0 auto;
+  width: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.type-stage .lion-svg {
+  width: 108px;
+  height: 120px;
+}
+
+.speech-bubble {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 18px;
+  border: 3px solid var(--stage-border);
+  background: var(--card);
+  box-shadow: var(--shadow-cyan);
+}
+
+.speech-bubble::before {
+  content: '';
+  position: absolute;
+  left: -11px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  background: var(--card);
+  border-left: 3px solid var(--stage-border);
+  border-bottom: 3px solid var(--stage-border);
+  border-radius: 0 0 0 3px;
+  transform: rotate(45deg);
+}
+
+.type-stage .giant-letter {
+  font-size: clamp(56px, 16vw, 84px);
+}
+
+.lion-svg {
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 3px 0 rgba(28, 20, 48, 0.12));
+}
+
+.lion-mane { fill: #ff8c2a; }
+.lion-ear,
+.lion-face,
+.lion-paw { fill: #ffe3b0; }
+.lion-ear-in { fill: #ff9ec4; }
+.lion-eye { fill: #241838; }
+.lion-eye-shine,
+.lion-shine { fill: #fff; }
+.lion-shine { opacity: 0.8; }
+.lion-cheek { fill: #ffb3c7; }
+.lion-nose,
+.lion-mouth-open { fill: #e25a28; }
+.lion-mouth-rest,
+.lion-mouth-happy,
+.lion-eyes-happy path {
+  fill: none;
+  stroke: #c24100;
+  stroke-width: 4px;
+  stroke-linecap: round;
+}
+
+.lion-mouth-happy,
+.lion-mouth-open,
+.lion-eyes-happy { display: none; }
+
+.lion-svg { transform-origin: 50% 78%; }
+
+.lion-tilt .lion-svg {
+  transform: rotate(-8deg);
+  transition: transform 0.28s ease;
+}
+
+.lion-talk .lion-mouth-rest { display: none; }
+.lion-talk .lion-mouth-open {
+  display: block;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lion-mouth 0.22s ease-in-out infinite;
+}
+
+.lion-talk .lion-svg { animation: lion-bounce 0.32s ease-in-out infinite; }
+
+.lion-happy .lion-mouth-rest,
+.lion-happy .lion-eyes-open { display: none; }
+.lion-happy .lion-mouth-happy,
+.lion-happy .lion-eyes-happy { display: block; }
+.lion-happy .lion-svg { animation: lion-hop 0.45s ease; }
+
+.feedback-lion {
+  width: 84px;
+  margin: 0 auto 6px;
+}
+
+.feedback-lion .lion-svg {
+  width: 84px;
+  height: 92px;
+}
+
+@keyframes lion-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes lion-mouth {
+  0%, 100% { transform: scaleY(0.45); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes lion-hop {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-8px) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@media (prefers-color-scheme: dark) {
+  .lion-svg { filter: drop-shadow(0 0 8px rgba(255, 150, 50, 0.55)); }
+  .lion-mane { fill: #ff9a3c; }
+  .lion-face,
+  .lion-ear,
+  .lion-paw { fill: #ffe7c2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lion-talk .lion-svg,
+  .lion-talk .lion-mouth-open,
+  .lion-happy .lion-svg { animation: none; }
+  .lion-tilt .lion-svg { transition: none; }
+  .lion-talk .lion-mouth-open { transform: none; }
+}
+
+@media (min-width: 700px) {
+  .type-stage { gap: 16px; padding: 20px 24px; }
+  .type-stage .lion { width: 160px; }
+  .type-stage .lion-svg { width: 160px; height: 176px; }
+  .speech-bubble {
+    flex: 0 1 420px;
+    min-height: 150px;
+    padding: 16px 20px 16px 22px;
+  }
+}
+
 /* Home: Type it, between Phonics and Words */
 .big-btn.home-type {
   background: linear-gradient(180deg, #ffb067 0%, var(--neon-orange) 48%, #c24100 100%);
