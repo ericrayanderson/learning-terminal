@@ -1,5 +1,5 @@
 /**
- * Learning Terminal. Letters (Phonics, Words) and Numbers practice.
+ * Learning Terminal. Letters (Phonics, Type it, Words) and Numbers practice.
  * Neon look, big simple choices.
  * Letter sounds: Buzzphonics (MIT)
  */
@@ -36,7 +36,7 @@ const NUMBER_WORDS = {
     16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty'
 };
 
-// track: home | letters-menu | sounds | words | numbers-menu | counting | addition | compare
+// track: home | letters-menu | sounds | type | words | numbers-menu | counting | addition | compare
 // mode: PLAY | DONE | READY (start screen, not saved)
 let track = 'home';
 let mode = 'PLAY';
@@ -566,6 +566,7 @@ function goHome() {
     wordLocked = false;
     stopSound();
     coolingDown = false;
+    setTypedLetter('');
     mode = 'PLAY';
     savedScreen = 'home';
     track = 'home';
@@ -578,6 +579,7 @@ function goLettersMenu() {
     wordLocked = false;
     stopSound();
     coolingDown = false;
+    setTypedLetter('');
     mode = 'PLAY';
     savedScreen = 'letters-menu';
     track = 'letters-menu';
@@ -588,6 +590,7 @@ function goLettersMenu() {
 function goNumbersMenu() {
     stopSound();
     coolingDown = false;
+    setTypedLetter('');
     mode = 'PLAY';
     savedScreen = 'numbers-menu';
     track = 'numbers-menu';
@@ -600,14 +603,16 @@ let startTitle = '';
 let startBegin = null;
 let startBack = null;
 let startWithAdd = false;
+let startNote = '';
 
-function showGameStart(trackId, title, begin, back, withAddMax) {
+function showGameStart(trackId, title, begin, back, withAddMax, note) {
     track = trackId;
     mode = 'READY';
     startTitle = title;
     startBegin = begin;
     startBack = back;
     startWithAdd = !!withAddMax;
+    startNote = note || '';
     stopSound();
     coolingDown = false;
     render();
@@ -616,6 +621,7 @@ function showGameStart(trackId, title, begin, back, withAddMax) {
 function renderGameStart() {
     const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', startTitle));
+    if (startNote) screen.appendChild(el('p', 'keyboard-note', startNote));
     screen.appendChild(settingsCard(startWithAdd));
     const start = el('button', 'big-btn primary', 'Start');
     start.type = 'button';
@@ -630,12 +636,13 @@ function renderGameStart() {
 
 function render() {
     app.innerHTML = '';
-    if (mode === 'READY' && (track === 'sounds' || track === 'words' || track === 'counting' || track === 'addition' || track === 'compare')) {
+    if (mode === 'READY' && (track === 'sounds' || track === 'type' || track === 'words' || track === 'counting' || track === 'addition' || track === 'compare')) {
         return renderGameStart();
     }
     if (track === 'home') return renderHome();
     if (track === 'letters-menu') return renderLettersMenu();
     if (track === 'sounds') return renderSounds();
+    if (track === 'type') return renderType();
     if (track === 'words') return renderWords();
     if (track === 'numbers-menu') return renderNumbersMenu();
     if (track === 'counting') return renderCounting();
@@ -653,7 +660,7 @@ function renderHome() {
 
     const letters = el('button', 'big-btn home-letters home-choice');
     letters.type = 'button';
-    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">2 games</span>';
+    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">3 games</span>';
     letters.onclick = function () {
         unlockAudio();
         goLettersMenu();
@@ -692,6 +699,13 @@ function renderLettersMenu() {
         showGameStart('sounds', 'Phonics', startSounds, goLettersMenu, false);
     };
 
+    const typeIt = el('button', 'big-btn home-type home-choice');
+    typeIt.type = 'button';
+    typeIt.innerHTML = '<span class="home-icon">⌨️</span><span>Type it</span>' + levelHtml(2);
+    typeIt.onclick = function () {
+        showGameStart('type', 'Type it', startType, goLettersMenu, false, 'Needs a keyboard');
+    };
+
     const words = el('button', 'big-btn home-words home-choice');
     words.type = 'button';
     words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>' + levelHtml(3);
@@ -700,6 +714,7 @@ function renderLettersMenu() {
     };
 
     col.appendChild(phonics);
+    col.appendChild(typeIt);
     col.appendChild(words);
     screen.appendChild(col);
     screen.appendChild(homeLink('Back', goHome));
@@ -849,6 +864,117 @@ function onSoundPick(letter) {
     } else {
         wrongCooldown(function () {
             if (track !== 'sounds') return;
+            playLetter(answer);
+        });
+    }
+}
+
+// ——— Type it: hear the phonics sound, press the letter key ———
+// C and K share one Buzzphonics clip, so either key counts for that sound.
+function typeAccepts(entry, ch) {
+    for (var i = 0; i < LETTERS.length; i++) {
+        if (LETTERS[i].file === entry.file && LETTERS[i].letter === ch) return true;
+    }
+    return false;
+}
+
+function setTypedLetter(ch) {
+    var stage = app.querySelector('.typed-letter');
+    if (stage) {
+        stage.textContent = ch || '';
+        stage.classList.toggle('hidden', !ch);
+    }
+    var flashes = document.querySelectorAll('.typed-flash');
+    for (var i = 0; i < flashes.length; i++) {
+        flashes[i].textContent = ch || '';
+        flashes[i].classList.toggle('hidden', !ch);
+    }
+}
+
+function startType() {
+    track = 'type';
+    coolingDown = false;
+    soundQueue = takeRounds(LETTERS, questionCount);
+    soundPos = 0;
+    nextTypeRound();
+}
+
+function nextTypeRound(deferSound) {
+    stopSound();
+    setTypedLetter('');
+    if (soundPos >= soundQueue.length) {
+        mode = 'DONE';
+        render();
+        playYes();
+        return;
+    }
+    mode = 'PLAY';
+    render();
+    var item = soundQueue[soundPos];
+    if (deferSound) {
+        afterPaint(function () {
+            if (track !== 'type' || mode !== 'PLAY') return;
+            playLetter(item);
+        });
+    } else {
+        playLetter(item);
+    }
+}
+
+function renderType() {
+    const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
+
+    if (mode === 'DONE') {
+        screen.appendChild(el('div', 'giant-emoji', '⭐'));
+        screen.appendChild(el('p', 'hint', 'Great job!'));
+        screen.appendChild(settingsCard(false));
+        const again = el('button', 'big-btn primary', 'Again');
+        again.type = 'button';
+        again.onclick = function () {
+            unlockAudio();
+            startType();
+        };
+        screen.appendChild(again);
+        screen.appendChild(homeLink('Back', goLettersMenu));
+        app.appendChild(screen);
+        return;
+    }
+
+    const answer = soundQueue[soundPos];
+    const prompt = el('button', 'letter-stage pulse');
+    prompt.type = 'button';
+    prompt.innerHTML =
+        '<span class="stage-speaker">🔊</span>' +
+        '<span class="hint tap-hear">Tap to hear</span>' +
+        '<span class="hint">Type the letter</span>' +
+        '<span class="giant-letter typed-letter hidden"></span>';
+    prompt.onclick = function () {
+        if (!coolingDown) playLetter(answer);
+    };
+    screen.appendChild(prompt);
+    screen.appendChild(homeLink('Back', goLettersMenu));
+    app.appendChild(screen);
+}
+
+function onTypeLetter(ch) {
+    if (coolingDown || mode !== 'PLAY' || track !== 'type') return;
+    var answer = soundQueue[soundPos];
+    if (!answer) return;
+    setTypedLetter(ch);
+    if (typeAccepts(answer, ch)) {
+        stopSound();
+        playYes();
+        if (soundPos + 1 < soundQueue.length) primeLetter(soundQueue[soundPos + 1]);
+        flashYes(function () {
+            setTypedLetter('');
+            if (track !== 'type') return;
+            soundPos++;
+            nextTypeRound(true);
+        });
+    } else {
+        wrongCooldown(function () {
+            setTypedLetter('');
+            if (track !== 'type') return;
             playLetter(answer);
         });
     }
@@ -1438,7 +1564,7 @@ function blockTextGesture(e) {
 
 function replayPrompt() {
     if (coolingDown) return;
-    if (track === 'sounds' && mode === 'PLAY' && soundQueue[soundPos]) {
+    if ((track === 'sounds' || track === 'type') && mode === 'PLAY' && soundQueue[soundPos]) {
         playLetter(soundQueue[soundPos]);
         return;
     }
@@ -1489,12 +1615,19 @@ function pickLetterKey(ch) {
     }
 }
 
-// Laptop and wide windows. A phone-sized window keeps tap behavior only.
-var wideKeys = window.matchMedia('(min-width: 700px)');
-document.addEventListener('keydown', function (e) {
-    if (!wideKeys.matches || e.repeat) return;
-    if (isTextField(e.target)) return;
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+function pressStart() {
+    var starters = app.querySelectorAll('button');
+    for (var s = 0; s < starters.length; s++) {
+        if (starters[s].textContent.replace(/\s+/g, ' ').trim() === 'Start') {
+            starters[s].click();
+            return;
+        }
+    }
+}
+
+// Type it listens at every width so an iPad portrait keyboard still works.
+// Every other game stays on wide windows only.
+function onTypeKeydown(e) {
     if (e.key === 'Escape') {
         e.preventDefault();
         pressBack();
@@ -1502,13 +1635,44 @@ document.addEventListener('keydown', function (e) {
     }
     if (mode === 'READY' && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault();
-        var starters = app.querySelectorAll('button');
-        for (var s = 0; s < starters.length; s++) {
-            if (starters[s].textContent.replace(/\s+/g, ' ').trim() === 'Start') {
-                starters[s].click();
-                return;
-            }
-        }
+        pressStart();
+        return;
+    }
+    if (mode !== 'PLAY') return;
+    if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        replayPrompt();
+        return;
+    }
+    if (coolingDown) {
+        e.preventDefault();
+        return;
+    }
+    if (/^[a-zA-Z]$/.test(e.key)) {
+        e.preventDefault();
+        onTypeLetter(e.key.toUpperCase());
+    }
+}
+
+// Laptop and wide windows. A phone-sized window keeps tap behavior only.
+var wideKeys = window.matchMedia('(min-width: 700px)');
+document.addEventListener('keydown', function (e) {
+    if (e.repeat) return;
+    if (isTextField(e.target)) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (track === 'type') {
+        onTypeKeydown(e);
+        return;
+    }
+    if (!wideKeys.matches) return;
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        pressBack();
+        return;
+    }
+    if (mode === 'READY' && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        pressStart();
         return;
     }
     var inRound = mode !== 'DONE' && mode !== 'READY' && (
