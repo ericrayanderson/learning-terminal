@@ -1,5 +1,5 @@
 /**
- * Learning Terminal. Letters (Phonics, Type it, Words) and Numbers practice.
+ * Learning Terminal. Letters (Phonics, See it, Type it, Words) and Numbers practice.
  * Neon look, big simple choices.
  * Letter sounds: Buzzphonics (MIT)
  */
@@ -36,7 +36,7 @@ const NUMBER_WORDS = {
     16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty'
 };
 
-// track: home | letters-menu | sounds | type | words | numbers-menu | counting | addition | compare
+// track: home | letters-menu | sounds | see | type | words | numbers-menu | counting | addition | compare
 // mode: PLAY | DONE | READY (start screen, not saved)
 let track = 'home';
 let mode = 'PLAY';
@@ -318,7 +318,7 @@ function playLetter(entry) {
     var pending = a.play();
     a._lastPlay = pending;
     if (pending && typeof pending.catch === 'function') pending.catch(function () {});
-    if (track === 'type') lionTalk(a);
+    if (track === 'type' || track === 'see') lionTalk(a);
     return a;
 }
 
@@ -642,13 +642,13 @@ function renderGameStart() {
 
 function render() {
     app.innerHTML = '';
-    if (mode === 'READY' && (track === 'sounds' || track === 'type' || track === 'words' || track === 'counting' || track === 'addition' || track === 'compare')) {
+    if (mode === 'READY' && (track === 'sounds' || track === 'see' || track === 'type' || track === 'words' || track === 'counting' || track === 'addition' || track === 'compare')) {
         return renderGameStart();
     }
     if (track === 'home') return renderHome();
     if (track === 'letters-menu') return renderLettersMenu();
     if (track === 'sounds') return renderSounds();
-    if (track === 'type') return renderType();
+    if (track === 'see' || track === 'type') return renderType();
     if (track === 'words') return renderWords();
     if (track === 'numbers-menu') return renderNumbersMenu();
     if (track === 'counting') return renderCounting();
@@ -666,7 +666,7 @@ function renderHome() {
 
     const letters = el('button', 'big-btn home-letters home-choice');
     letters.type = 'button';
-    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">3 games</span>';
+    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">4 games</span>';
     letters.onclick = function () {
         unlockAudio();
         goLettersMenu();
@@ -705,6 +705,13 @@ function renderLettersMenu() {
         showGameStart('sounds', 'Phonics', startSounds, goLettersMenu, false);
     };
 
+    const seeIt = el('button', 'big-btn home-see home-choice');
+    seeIt.type = 'button';
+    seeIt.innerHTML = '<span class="home-icon case-keep">Aa</span><span>See it, type it</span>' + levelHtml(1);
+    seeIt.onclick = function () {
+        showGameStart('see', 'See it, type it', startSee, goLettersMenu, false, 'Needs a keyboard');
+    };
+
     const typeIt = el('button', 'big-btn home-type home-choice');
     typeIt.type = 'button';
     typeIt.innerHTML = '<span class="home-icon">⌨️</span><span>Type it</span>' + levelHtml(2);
@@ -720,6 +727,7 @@ function renderLettersMenu() {
     };
 
     col.appendChild(phonics);
+    col.appendChild(seeIt);
     col.appendChild(typeIt);
     col.appendChild(words);
     screen.appendChild(col);
@@ -966,8 +974,12 @@ function setLionPose(pose) {
     }
 }
 
+function isLionGame() {
+    return track === 'type' || track === 'see';
+}
+
 function lionTalk(audio) {
-    if (!audio || audio.muted || track !== 'type') return;
+    if (!audio || audio.muted || !isLionGame()) return;
     var token = ++lionTalkToken;
     setLionPose('lion-talk');
     var target = letterHeardTarget(audio) || 0.9;
@@ -996,6 +1008,14 @@ function startType() {
     nextTypeRound();
 }
 
+function startSee() {
+    track = 'see';
+    coolingDown = false;
+    soundQueue = takeRounds(LETTERS, questionCount);
+    soundPos = 0;
+    nextTypeRound();
+}
+
 function nextTypeRound(deferSound) {
     stopSound();
     setTypedLetter('');
@@ -1010,7 +1030,7 @@ function nextTypeRound(deferSound) {
     var item = soundQueue[soundPos];
     if (deferSound) {
         afterPaint(function () {
-            if (track !== 'type' || mode !== 'PLAY') return;
+            if (!isLionGame() || mode !== 'PLAY') return;
             playLetter(item);
         });
     } else {
@@ -1029,7 +1049,8 @@ function renderType() {
         again.type = 'button';
         again.onclick = function () {
             unlockAudio();
-            startType();
+            if (track === 'see') startSee();
+            else startType();
         };
         screen.appendChild(again);
         screen.appendChild(homeLink('Back', goLettersMenu));
@@ -1038,13 +1059,23 @@ function renderType() {
     }
 
     const answer = soundQueue[soundPos];
-    const prompt = el('button', 'letter-stage type-stage pulse');
+    const showTarget = track === 'see';
+    const prompt = el('button', 'letter-stage type-stage pulse' + (showTarget ? ' see-stage' : ''));
     prompt.type = 'button';
+    var targetHtml = '<span class="hint">Type the letter</span>';
+    if (showTarget) {
+        var shown = answer.letter;
+        targetHtml =
+            '<span class="see-pair">' +
+                '<span class="see-upper">' + shown + '</span>' +
+                '<span class="see-lower">' + shown.toLowerCase() + '</span>' +
+            '</span>';
+    }
     prompt.innerHTML =
         lionMarkup() +
         '<span class="speech-bubble">' +
             '<span class="hint tap-hear">Tap to hear</span>' +
-            '<span class="hint">Type the letter</span>' +
+            targetHtml +
             '<span class="giant-letter typed-letter hidden"></span>' +
         '</span>';
     prompt.onclick = function () {
@@ -1056,11 +1087,14 @@ function renderType() {
 }
 
 function onTypeLetter(ch) {
-    if (coolingDown || mode !== 'PLAY' || track !== 'type') return;
+    if (coolingDown || mode !== 'PLAY' || !isLionGame()) return;
     var answer = soundQueue[soundPos];
     if (!answer) return;
     setTypedLetter(ch);
-    if (typeAccepts(answer, ch)) {
+    // See it shows one letter, so only that key counts. Type it accepts
+    // either C or K, because those two share a sound.
+    var correct = track === 'see' ? ch === answer.letter : typeAccepts(answer, ch);
+    if (correct) {
         stopSound();
         playYes();
         if (soundPos + 1 < soundQueue.length) primeLetter(soundQueue[soundPos + 1]);
@@ -1068,14 +1102,14 @@ function onTypeLetter(ch) {
         flashYes(function () {
             setTypedLetter('');
             setLionPose('');
-            if (track !== 'type') return;
+            if (!isLionGame()) return;
             soundPos++;
             nextTypeRound(true);
         });
     } else {
         wrongCooldown(function () {
             setTypedLetter('');
-            if (track !== 'type') return;
+            if (!isLionGame()) return;
             playLetter(answer);
         });
         setLionPose('lion-tilt');
@@ -1666,7 +1700,7 @@ function blockTextGesture(e) {
 
 function replayPrompt() {
     if (coolingDown) return;
-    if ((track === 'sounds' || track === 'type') && mode === 'PLAY' && soundQueue[soundPos]) {
+    if ((track === 'sounds' || track === 'type' || track === 'see') && mode === 'PLAY' && soundQueue[soundPos]) {
         playLetter(soundQueue[soundPos]);
         return;
     }
@@ -1727,7 +1761,7 @@ function pressStart() {
     }
 }
 
-// Type it listens at every width so an iPad portrait keyboard still works.
+// Type it and See it listen at every width so an iPad portrait keyboard still works.
 // Every other game stays on wide windows only.
 function onTypeKeydown(e) {
     if (e.key === 'Escape') {
@@ -1762,7 +1796,7 @@ document.addEventListener('keydown', function (e) {
     if (e.repeat) return;
     if (isTextField(e.target)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (track === 'type') {
+    if (track === 'type' || track === 'see') {
         onTypeKeydown(e);
         return;
     }

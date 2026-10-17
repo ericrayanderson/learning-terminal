@@ -770,6 +770,55 @@ button:disabled { cursor: not-allowed; }
   font-size: clamp(56px, 16vw, 84px);
 }
 
+.see-pair {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.see-upper,
+.see-lower {
+  font-weight: 900;
+  line-height: 0.85;
+  text-transform: none;
+}
+
+.see-upper {
+  font-size: clamp(72px, 18vw, 128px);
+  color: var(--accent-cyan);
+  text-shadow: var(--letter-shadow);
+}
+
+.see-lower {
+  font-size: clamp(28px, 7vw, 48px);
+  color: var(--ink);
+  padding-bottom: 4px;
+}
+
+.see-stage .typed-letter {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  border-radius: 14px;
+  background: var(--card);
+  font-size: clamp(80px, 22vw, 140px);
+}
+
+.speech-bubble { container-type: inline-size; }
+
+@container (max-width: 150px) {
+  .see-lower { display: none; }
+}
+
 .lion-svg {
   display: block;
   overflow: visible;
@@ -875,6 +924,21 @@ button:disabled { cursor: not-allowed; }
     min-height: 150px;
     padding: 16px 20px 16px 22px;
   }
+}
+
+/* Home: See it, type it */
+.big-btn.home-see {
+  background: linear-gradient(180deg, #f0c6ff 0%, #d07bff 48%, #9b3dff 100%);
+  color: #2a0638;
+  border: 3px solid #f6e4ff;
+  box-shadow:
+    0 8px 16px rgba(150, 40, 200, 0.16),
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 6px 0 #6a1e98;
+}
+
+.big-btn.home-see:active:not(:disabled) {
+  box-shadow: 0 8px 16px rgba(150, 40, 200, 0.16), 0 2px 0 #6a1e98;
 }
 
 /* Home: Type it, between Phonics and Words */

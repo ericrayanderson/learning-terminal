@@ -7,6 +7,7 @@ Letter and number games for little kids.
 Letters
 
 - Phonics: hear a letter sound, then pick the letter. Easy.
+- See it, type it: see the letter, then type that key. Easy.
 - Type it: hear a letter sound, then type it on a keyboard. Medium.
 - Words: spell a 3-letter word. Harder.
 
