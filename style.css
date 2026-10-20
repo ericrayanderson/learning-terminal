@@ -602,6 +602,7 @@ button:disabled { cursor: not-allowed; }
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
+  font-feature-settings: "zero" 0;
 }
 
 /* Number dots */
@@ -638,6 +639,13 @@ button:disabled { cursor: not-allowed; }
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+/* Digits in the number games. Orbitron's zero is marked; this is a plain open 0. */
+.numeral {
+  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: "zero" 0;
+  font-variant-numeric: lining-nums;
 }
 
 .math-num {

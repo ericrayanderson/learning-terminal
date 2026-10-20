@@ -1165,7 +1165,7 @@ function renderCounting() {
 
     const row = el('div', 'big-actions row');
     quizOptions.forEach(function (opt) {
-        const btn = el('button', 'big-btn letter-choice', String(opt));
+        const btn = el('button', 'big-btn letter-choice numeral', String(opt));
         btn.type = 'button';
         btn.onclick = function () { onCountPick(opt); };
         row.appendChild(btn);
@@ -1307,9 +1307,9 @@ function renderAddition() {
     stage.type = 'button';
     stage.innerHTML =
         '<div class="math-row">' +
-        '<div class="math-group">' + dotsHtml(mathA) + '<span class="math-num">' + mathA + '</span></div>' +
+        '<div class="math-group">' + dotsHtml(mathA) + '<span class="math-num numeral">' + mathA + '</span></div>' +
         '<span class="math-op">+</span>' +
-        '<div class="math-group">' + dotsHtml(mathB) + '<span class="math-num">' + mathB + '</span></div>' +
+        '<div class="math-group">' + dotsHtml(mathB) + '<span class="math-num numeral">' + mathB + '</span></div>' +
         '</div>' +
         '<span class="hint">Tap to hear</span>';
     stage.onclick = function () {
@@ -1320,7 +1320,7 @@ function renderAddition() {
 
     const row = el('div', 'big-actions row');
     quizOptions.forEach(function (opt) {
-        const btn = el('button', 'big-btn letter-choice' + (String(opt).length > 1 ? ' two-digit' : ''), String(opt));
+        const btn = el('button', 'big-btn letter-choice numeral' + (String(opt).length > 1 ? ' two-digit' : ''), String(opt));
         btn.type = 'button';
         btn.onclick = function () { onAddPick(opt); };
         row.appendChild(btn);
