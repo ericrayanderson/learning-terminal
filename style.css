@@ -49,6 +49,9 @@
   --vignette: rgba(90, 60, 150, 0.05);
   --stars-off: 0.42;
   --font: "Orbitron", system-ui, sans-serif;
+  /* One ball size for every count. Rows hold at most five. */
+  --dot: 18px;
+  --dot-gap: 4px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -356,7 +359,9 @@ button:disabled { cursor: not-allowed; }
 .big-btn.letter-choice {
   flex: 1;
   min-height: 150px;
+  /* One digit and two digits share this size. The button is already wide enough. */
   font-size: clamp(56px, 16vw, 72px);
+  white-space: nowrap;
   background: linear-gradient(180deg, var(--tile-top) 0%, var(--tile-bottom) 100%);
   color: var(--choice-ink);
   border: 3px solid var(--choice-border);
@@ -364,10 +369,6 @@ button:disabled { cursor: not-allowed; }
     var(--choice-glow),
     0 6px 0 #5c4a10;
   text-shadow: var(--choice-text-shadow);
-}
-
-.big-btn.letter-choice.two-digit {
-  font-size: clamp(36px, 10vw, 48px);
 }
 
 .big-btn.letter-choice:active:not(:disabled) {
@@ -605,19 +606,28 @@ button:disabled { cursor: not-allowed; }
   font-feature-settings: "zero" 0;
 }
 
-/* Number dots */
+/* Number dots. Five per row, like a ten-frame: 7 is a row of 5 then a row of 2. */
 .dots {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  max-width: 220px;
-  margin: 6px 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--dot-gap);
+  width: max-content;
+  max-width: 100%;
+  margin: 6px auto;
+}
+
+.dot-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: var(--dot-gap);
 }
 
 .dot {
-  width: 22px;
-  height: 22px;
+  width: var(--dot);
+  height: var(--dot);
+  flex: 0 0 var(--dot);
   border-radius: 50%;
   background: linear-gradient(160deg, #ff8a70, var(--neon-pink));
   box-shadow: 0 0 10px rgba(255, 43, 214, 0.55);
@@ -629,8 +639,8 @@ button:disabled { cursor: not-allowed; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
   width: 100%;
 }
 
@@ -644,8 +654,8 @@ button:disabled { cursor: not-allowed; }
 /* Digits in the number games. Orbitron's zero is marked; this is a plain open 0. */
 .numeral {
   font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-feature-settings: "zero" 0;
-  font-variant-numeric: lining-nums;
+  font-feature-settings: "zero" 0, "tnum" 1, "lnum" 1;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .math-num {
@@ -683,7 +693,7 @@ button:disabled { cursor: not-allowed; }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 8px;
+  padding: 8px 4px;
   background: var(--compare-fill);
 }
 
@@ -1120,23 +1130,6 @@ button:disabled { cursor: not-allowed; }
   .big-btn.word-tile { min-height: 62px; font-size: 30px; }
 }
 
-.dots {
-  max-width: 240px;
-}
-
-/* More than 8 dots (Adding sums above the original cap) stay inside the stage. */
-.dots.dots-pack {
-  gap: 4px;
-  max-width: 124px;
-  margin: 2px 0;
-}
-
-.dots.dots-pack .dot {
-  width: 10px;
-  height: 10px;
-  box-shadow: 0 0 4px rgba(255, 43, 214, 0.4);
-}
-
 /* Parent-facing copy stays off the phone layout. */
 .wide-only { display: none; }
 
@@ -1218,9 +1211,10 @@ button:disabled { cursor: not-allowed; }
     min-height: 180px;
     font-size: clamp(72px, 8vw, 112px);
   }
-  .big-btn.letter-choice.two-digit { font-size: clamp(48px, 5vw, 72px); }
-  .dots.dots-pack { max-width: 240px; gap: 6px; }
-  .dots.dots-pack .dot { width: 16px; height: 16px; }
+  :root {
+    --dot: 36px;
+    --dot-gap: 8px;
+  }
   .big-btn.letter-choice.wide-label { font-size: 40px !important; }
   .compare-vs { font-size: 20px; color: var(--ink); }
   .big-btn.word-tile {
@@ -1234,8 +1228,7 @@ button:disabled { cursor: not-allowed; }
     font-size: 56px;
   }
 
-  .dots { max-width: 420px; gap: 14px; }
-  .dot { width: 36px; height: 36px; }
+  .math-row { gap: 16px; }
   .math-num { font-size: 48px; }
   .math-op { font-size: 64px; }
 
@@ -1282,9 +1275,6 @@ button:disabled { cursor: not-allowed; }
   .big-btn.letter-choice { min-height: 128px; }
   .big-btn.word-tile { min-height: 84px; }
   .word-slot { width: 84px; height: 84px; font-size: 42px; }
-  .dot { width: 28px; height: 28px; }
-  .dots.dots-pack { max-width: 200px; gap: 4px; }
-  .dots.dots-pack .dot { width: 14px; height: 14px; }
 }
 
 @media (min-width: 1100px) {

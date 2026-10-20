@@ -469,8 +469,17 @@ function shuffle(a) {
 }
 
 function dotsHtml(n) {
-    var html = '<span class="dots' + (n > 8 ? ' dots-pack' : '') + '">';
-    for (var i = 0; i < n; i++) html += '<span class="dot"></span>';
+    var html = '<span class="dots">';
+    var i = 0;
+    while (i < n) {
+        html += '<span class="dot-row">';
+        var end = Math.min(i + 5, n);
+        while (i < end) {
+            html += '<span class="dot"></span>';
+            i++;
+        }
+        html += '</span>';
+    }
     html += '</span>';
     return html;
 }
@@ -1320,7 +1329,7 @@ function renderAddition() {
 
     const row = el('div', 'big-actions row');
     quizOptions.forEach(function (opt) {
-        const btn = el('button', 'big-btn letter-choice numeral' + (String(opt).length > 1 ? ' two-digit' : ''), String(opt));
+        const btn = el('button', 'big-btn letter-choice numeral', String(opt));
         btn.type = 'button';
         btn.onclick = function () { onAddPick(opt); };
         row.appendChild(btn);
