@@ -297,24 +297,6 @@ button:disabled { cursor: not-allowed; }
   filter: var(--emoji-glow);
 }
 
-.tie-letter {
-  font-size: 96px;
-  font-weight: 900;
-  line-height: 0.85;
-  color: var(--accent-cyan);
-  text-shadow: var(--letter-shadow);
-}
-
-.tie-word {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink);
-}
-
 .stage-speaker {
   font-size: 80px;
   line-height: 1;

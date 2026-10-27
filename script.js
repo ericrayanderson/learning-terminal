@@ -36,13 +36,6 @@ const LETTERS = [
     { letter: 'L', file: 'l', word: 'lion', emoji: '🦁' }
 ];
 
-const NUMBER_WORDS = {
-    1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
-    6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten',
-    11: 'eleven', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen',
-    16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty'
-};
-
 // track: home | letters-menu | sounds | letters | words | numbers-menu | counting | addition | compare
 // mode: PLAY | DONE | READY (start screen, not saved)
 let track = 'home';
@@ -56,8 +49,6 @@ let turnsTotal = 10;
 let questionCount = 10;
 // Biggest sum Adding will ask. 8 is the original 1-4 plus 1-4 cap.
 let addMax = 8;
-let soundQueue = [];
-let soundPos = 0;
 
 // 3-letter words a young kid knows. Letters stay inside the phonics sound set.
 const WORDS = [
@@ -288,9 +279,6 @@ function clearStaleScores() {
 let audioCtx = null;
 let currentAudio = null;
 const audioCache = new Map();
-let preferredVoice = null;
-let speechSeq = 0;
-let speechTimers = [];
 
 function unlockAudio() {
     if (!audioCtx) {
@@ -305,88 +293,12 @@ function unlockAudio() {
     return audioCtx;
 }
 
-function pickVoice() {
-    if (!window.speechSynthesis) return null;
-    const voices = window.speechSynthesis.getVoices() || [];
-    if (!voices.length) return preferredVoice;
-    const prefer = [
-        /google us english/i,
-        /google uk english female/i,
-        /microsoft (aria|jenny|sara)/i,
-        /samantha/i,
-        /karen/i,
-        /moira/i,
-        /female/i,
-        /en-us/i,
-        /en-gb/i
-    ];
-    for (var i = 0; i < prefer.length; i++) {
-        var v = voices.find(function (x) {
-            return prefer[i].test(x.name) || prefer[i].test(x.lang);
-        });
-        if (v) {
-            preferredVoice = v;
-            return v;
-        }
-    }
-    preferredVoice = voices.find(function (v) {
-        return v.lang && v.lang.toLowerCase().indexOf('en') === 0;
-    }) || voices[0];
-    return preferredVoice;
-}
-
-if (window.speechSynthesis) {
-    window.speechSynthesis.onvoiceschanged = function () { pickVoice(); };
-    pickVoice();
-}
-
 function stopSound() {
     if (currentAudio) {
         currentAudio.pause();
         currentAudio.currentTime = 0;
         currentAudio = null;
     }
-    // Cancel any staged count-out-loud timers so they can't overlap
-    speechSeq++;
-    speechTimers.forEach(function (id) { clearTimeout(id); });
-    speechTimers = [];
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
-}
-
-// Bumped on every speak so a cancelled utterance cannot mark the new one finished.
-var speechGen = 0;
-var speakDone = true;
-
-function speak(text, opts) {
-    opts = opts || {};
-    if (!window.speechSynthesis || !text) return;
-    // Only cancel if this is a fresh "interrupt" speak (default true).
-    // Cancelling and then speaking outside the original tap is dropped on iOS.
-    if (opts.cancel !== false) {
-        window.speechSynthesis.cancel();
-    } else if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-    }
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = opts.rate != null ? opts.rate : 0.9;
-    u.pitch = opts.pitch != null ? opts.pitch : 1.05;
-    u.lang = 'en-US';
-    const voice = pickVoice();
-    if (voice) u.voice = voice;
-    var gen = ++speechGen;
-    speakDone = false;
-    function finish() {
-        if (gen === speechGen) speakDone = true;
-    }
-    u.onend = finish;
-    u.onerror = finish;
-    window.speechSynthesis.speak(u);
-}
-
-function scheduleSpeech(fn, delay) {
-    const id = setTimeout(fn, delay);
-    speechTimers.push(id);
-    return id;
 }
 
 function getLetterAudio(entry) {
@@ -535,22 +447,6 @@ function playSoftNo() {
     const t = unlockAudio().currentTime;
     tone(494, t, 0.1, 'sine', 0.035);
     tone(392, t + 0.09, 0.14, 'sine', 0.03);
-}
-
-/** Speak the number word; soft count beeps after for counting practice */
-function playNumberVoice(n, withBeeps) {
-    stopSound();
-    unlockAudio();
-    const word = NUMBER_WORDS[n] || String(n);
-    speak(word, { rate: 0.85, pitch: 1.08 });
-    if (withBeeps) {
-        // light beeps after the word so kids can count along
-        const ctx = unlockAudio();
-        const t0 = ctx.currentTime + 0.55;
-        for (var i = 0; i < n; i++) {
-            tone(500 + i * 15, t0 + i * 0.22, 0.12, 'sine', 0.07);
-        }
-    }
 }
 
 // ——— DOM ———
@@ -1039,27 +935,6 @@ function fadeWrong(button, after) {
     }, LETTER_WRONG_MS);
 }
 
-function showTie(entry, nextFn) {
-    coolingDown = true;
-    var stage = app.querySelector('.letter-stage');
-    if (stage) {
-        stage.classList.remove('pulse');
-        stage.onclick = null;
-        stage.innerHTML =
-            '<span class="stage-emoji">' + entry.emoji + '</span>' +
-            '<span class="tie-letter">' + entry.letter + '</span>' +
-            '<span class="tie-word">' + entry.word + '</span>';
-    }
-    var choices = app.querySelector('.big-actions');
-    if (choices) choices.classList.add('hidden');
-    playYes();
-    playLetter(entry);
-    setTimeout(function () {
-        coolingDown = false;
-        if (nextFn) nextFn();
-    }, 1200);
-}
-
 function startLetterPractice(which) {
     track = which;
     coolingDown = false;
@@ -1176,7 +1051,9 @@ function onLetterPick(letter, btn) {
             if (track === 'sounds') primeLetter(letterEntry(upcoming));
         }
         queuedLetter = upcoming;
-        showTie(entry, function () {
+        stopSound();
+        playYes();
+        flashYes(function () {
             if (track !== 'sounds' && track !== 'letters') return;
             roundIndex++;
             nextLetterRound(true);
@@ -1210,12 +1087,6 @@ function nextCountingRound() {
     quizAnswer = countItems;
     mode = 'PLAY';
     render();
-    // Held in speechTimers so an answer tap cancels it. Otherwise this
-    // prompt speaks over the Yes / Try again card when the kid answers fast.
-    scheduleSpeech(function () {
-        if (track !== 'counting' || mode !== 'PLAY' || coolingDown) return;
-        speak('how many?', { rate: 0.95 });
-    }, 250);
 }
 
 function renderCounting() {
@@ -1225,16 +1096,10 @@ function renderCounting() {
         return renderNumDone(screen, 'Counting', startCounting);
     }
 
-    const stage = el('button', 'letter-stage');
-    stage.type = 'button';
+    const stage = el('div', 'letter-stage');
     stage.innerHTML =
         dotsHtml(countItems) +
-        '<span class="hint">How many? Tap to count</span>';
-    stage.onclick = function () {
-        if (coolingDown) return;
-        // Count out loud: "one… two… three…" then total
-        countOutLoud(countItems);
-    };
+        '<span class="hint">How many?</span>';
     screen.appendChild(stage);
 
     const row = el('div', 'big-actions row');
@@ -1249,69 +1114,11 @@ function renderCounting() {
     app.appendChild(screen);
 }
 
-function countOutLoud(n) {
-    // Bump sequence so any older chain dies
-    stopSound();
-    unlockAudio();
-    const mySeq = speechSeq;
-    var i = 1;
-
-    function sayWord(word, done) {
-        if (mySeq !== speechSeq) return;
-        if (!window.speechSynthesis) {
-            done();
-            return;
-        }
-        const u = new SpeechSynthesisUtterance(word);
-        u.rate = 0.88;
-        u.pitch = 1.08;
-        u.lang = 'en-US';
-        const voice = pickVoice();
-        if (voice) u.voice = voice;
-        u.onend = function () {
-            if (mySeq !== speechSeq) return;
-            // small pause between numbers
-            scheduleSpeech(done, 120);
-        };
-        u.onerror = function () {
-            if (mySeq !== speechSeq) return;
-            scheduleSpeech(done, 120);
-        };
-        window.speechSynthesis.speak(u);
-    }
-
-    function step() {
-        if (mySeq !== speechSeq) return;
-        if (i > n) {
-            // Finish with the total once: "five"
-            scheduleSpeech(function () {
-                if (mySeq !== speechSeq) return;
-                sayWord(NUMBER_WORDS[n] || String(n), function () {});
-            }, 180);
-            return;
-        }
-        sayWord(NUMBER_WORDS[i] || String(i), function () {
-            i++;
-            step();
-        });
-    }
-    step();
-}
-
-/** After a wrong answer: clearly say the correct count once */
-function sayCorrectCount(n) {
-    stopSound();
-    unlockAudio();
-    const word = NUMBER_WORDS[n] || String(n);
-    speak('there are ' + word, { rate: 0.88 });
-}
-
 function onCountPick(n) {
     if (coolingDown) return;
     if (n === quizAnswer) {
         stopSound();
         playYes();
-        speak(NUMBER_WORDS[n] || String(n), { rate: 0.9 });
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
@@ -1323,11 +1130,7 @@ function onCountPick(n) {
             nextCountingRound();
         });
     } else {
-        // Don't re-run a full count-out (timers used to stack and sound random).
-        // Say the correct total clearly, once.
-        wrongCooldown(function () {
-            sayCorrectCount(countItems);
-        });
+        wrongCooldown();
     }
 }
 
@@ -1364,11 +1167,6 @@ function nextAdditionRound() {
     quizOptions = shuffle(Array.from(opts));
     mode = 'PLAY';
     render();
-    // Held in speechTimers so an answer tap cancels it before feedback.
-    scheduleSpeech(function () {
-        if (track !== 'addition' || mode !== 'PLAY' || coolingDown) return;
-        speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
-    }, 280);
 }
 
 function renderAddition() {
@@ -1377,19 +1175,13 @@ function renderAddition() {
         return renderNumDone(screen, 'Adding', startAddition);
     }
 
-    const stage = el('button', 'letter-stage');
-    stage.type = 'button';
+    const stage = el('div', 'letter-stage');
     stage.innerHTML =
         '<div class="math-row">' +
         '<div class="math-group">' + dotsHtml(mathA) + '<span class="math-num numeral">' + mathA + '</span></div>' +
         '<span class="math-op">+</span>' +
         '<div class="math-group">' + dotsHtml(mathB) + '<span class="math-num numeral">' + mathB + '</span></div>' +
-        '</div>' +
-        '<span class="hint">Tap to hear</span>';
-    stage.onclick = function () {
-        if (coolingDown) return;
-        speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
-    };
+        '</div>';
     screen.appendChild(stage);
 
     const row = el('div', 'big-actions row');
@@ -1409,7 +1201,6 @@ function onAddPick(n) {
     if (n === quizAnswer) {
         stopSound();
         playYes();
-        speak(NUMBER_WORDS[n] || String(n), { rate: 0.9 });
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
@@ -1421,9 +1212,7 @@ function onAddPick(n) {
             nextAdditionRound();
         });
     } else {
-        wrongCooldown(function () {
-            speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
-        });
+        wrongCooldown();
     }
 }
 
@@ -1443,11 +1232,6 @@ function nextCompareRound() {
     quizAnswer = compareLeft > compareRight ? 'LEFT' : 'RIGHT';
     mode = 'PLAY';
     render();
-    // Held in speechTimers so an answer tap cancels it before feedback.
-    scheduleSpeech(function () {
-        if (track !== 'compare' || mode !== 'PLAY' || coolingDown) return;
-        speak('which is bigger?', { rate: 0.95 });
-    }, 250);
 }
 
 function renderCompare() {
@@ -1485,8 +1269,6 @@ function onComparePick(side) {
     if (side === quizAnswer) {
         stopSound();
         playYes();
-        var n = side === 'LEFT' ? compareLeft : compareRight;
-        speak(NUMBER_WORDS[n] || String(n), { rate: 0.9 });
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
@@ -1498,9 +1280,7 @@ function onComparePick(side) {
             nextCompareRound();
         });
     } else {
-        wrongCooldown(function () {
-            speak('which is bigger?', { rate: 0.95 });
-        });
+        wrongCooldown();
     }
 }
 
@@ -1555,13 +1335,6 @@ function tilesFor(word, level) {
     return shuffle(need.concat(extras));
 }
 
-function speakWord() {
-    if (!wordTarget) return;
-    stopSound();
-    unlockAudio();
-    speak(wordTarget.word, { rate: 0.82, pitch: 1.05 });
-}
-
 function startWords() {
     letterWaitGen++;
     wordLocked = false;
@@ -1572,7 +1345,7 @@ function startWords() {
     nextWordRound();
 }
 
-function nextWordRound(deferSound) {
+function nextWordRound() {
     letterWaitGen++;
     wordLocked = false;
     stopSound();
@@ -1587,16 +1360,6 @@ function nextWordRound(deferSound) {
     wordTiles = tilesFor(wordTarget.word, levels.words);
     mode = 'PLAY';
     render();
-    // In the tap that opened the round when it is a tap, so speech can start.
-    // After a Yes card, the new word is on screen before it is spoken.
-    if (deferSound) {
-        afterPaint(function () {
-            if (track !== 'words' || mode !== 'PLAY') return;
-            speakWord();
-        });
-    } else {
-        speakWord();
-    }
 }
 
 function renderWords() {
@@ -1619,15 +1382,9 @@ function renderWords() {
     }
 
     const stage = el('div', 'letter-stage word-stage');
-    const hear = el('button', 'word-hear');
-    hear.type = 'button';
-    hear.appendChild(el('span', 'stage-emoji', wordTarget.emoji));
-    hear.appendChild(el('span', 'hint', 'Tap to hear'));
-    hear.onclick = function () {
-        if (coolingDown || wordLocked) return;
-        speakWord();
-    };
-    stage.appendChild(hear);
+    const picture = el('div', 'word-hear');
+    picture.appendChild(el('span', 'stage-emoji', wordTarget.emoji));
+    stage.appendChild(picture);
 
     const slots = el('div', 'word-slots');
     for (var i = 0; i < 3; i++) {
@@ -1670,8 +1427,7 @@ function onWordTile(letter) {
     whenLetterHeard(clip, function () {
         wordLocked = false;
         if (track !== 'words' || mode !== 'PLAY') return;
-        // Drop the silent tail so the feedback speech isn't ducked, without
-        // cancelling the synthesizer (that would swallow the word on iOS).
+        // Drop the silent tail so the Yes chime is not covered by the clip.
         if (currentAudio === clip) {
             try { clip.pause(); } catch (e) {}
             currentAudio = null;
@@ -1693,15 +1449,13 @@ function checkWord() {
     var spelled = wordSpelling.join('');
     var target = wordTarget.word.toUpperCase();
     if (spelled === target) {
+        stopSound();
         playYes();
-        speak(wordTarget.word, { rate: 0.85, cancel: false });
-        coolingDown = true;
-        setTimeout(function () {
-            coolingDown = false;
+        flashYes(function () {
             if (track !== 'words') return;
             wordPos++;
-            nextWordRound(true);
-        }, 1100);
+            nextWordRound();
+        });
         return;
     }
     stopSound();
@@ -1720,7 +1474,6 @@ function checkWord() {
         if (track !== 'words' || mode !== 'PLAY') return;
         wordSpelling = [];
         render();
-        speakWord();
     }, LETTER_WRONG_MS);
 }
 
@@ -1747,29 +1500,19 @@ function afterPaint(fn) {
 }
 
 // ——— Feedback ———
-// Yes card stays up at least 700ms, and until its speech ends. Then the card
-// is painted away, and only then does nextFn show the following question.
+// The same Yes card for every game. It stays 700ms, then the next question.
 var YES_MS = 700;
-var YES_CAP = 2200;
 
 function flashYes(nextFn) {
+    coolingDown = true;
     yesOverlay.classList.remove('hidden');
-    var since = Date.now();
-    var gen = speechGen;
-    var waitSpeech = !speakDone;
-    function tick() {
-        var elapsed = Date.now() - since;
-        var speaking = waitSpeech && gen === speechGen && !speakDone && elapsed < YES_CAP;
-        if (elapsed >= YES_MS && !speaking) {
-            yesOverlay.classList.add('hidden');
-            afterPaint(function () {
-                if (nextFn) nextFn();
-            });
-            return;
-        }
-        setTimeout(tick, 40);
-    }
-    setTimeout(tick, 40);
+    setTimeout(function () {
+        yesOverlay.classList.add('hidden');
+        coolingDown = false;
+        afterPaint(function () {
+            if (nextFn) nextFn();
+        });
+    }, YES_MS);
 }
 
 function wrongCooldown(after) {
