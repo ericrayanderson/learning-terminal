@@ -755,8 +755,7 @@ button:disabled { cursor: not-allowed; }
 .wide-only { display: none; }
 
 .site-title,
-.site-sub,
-.credit-link {
+.site-sub {
   font-family: system-ui, sans-serif;
 }
 
@@ -780,15 +779,6 @@ button:disabled { cursor: not-allowed; }
   line-height: 1.3;
 }
 
-.credit-link {
-  margin-top: 2px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--muted);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 /* Tablet and laptop. Phone widths stay on the rules above. */
 @media (min-width: 700px) {
   .simple-screen {
@@ -802,8 +792,6 @@ button:disabled { cursor: not-allowed; }
     align-items: center;
     gap: 4px;
   }
-
-  a.credit-link.wide-only { display: inline-block; }
 
   .home-screen .big-actions,
   .menu-screen .big-actions {

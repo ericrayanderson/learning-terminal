@@ -719,11 +719,6 @@ function renderHome() {
     col.appendChild(letters);
     col.appendChild(numbers);
     screen.appendChild(col);
-    const credit = el('a', 'credit-link wide-only', 'Made by Eric');
-    credit.href = 'https://ericrayanderson.com';
-    credit.target = '_blank';
-    credit.rel = 'noopener noreferrer';
-    screen.appendChild(credit);
     app.appendChild(screen);
 }
 
