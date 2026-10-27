@@ -14,6 +14,13 @@ const CONFUSABLE_PAIRS = [
     ['C', 'G'], ['E', 'F'], ['I', 'L'], ['P', 'R']
 ];
 
+const NUMBER_WORDS = {
+    1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
+    6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten',
+    11: 'eleven', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen',
+    16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty'
+};
+
 const LETTERS = [
     { letter: 'S', file: 's' },
     { letter: 'A', file: 'a' },
@@ -216,6 +223,13 @@ function clearStaleScores() {
 let audioCtx = null;
 let currentAudio = null;
 const audioCache = new Map();
+let preferredVoice = null;
+let speechSeq = 0;
+let speechTimers = [];
+let speechUnlocked = false;
+// Bumped on every speak so a cancelled utterance cannot mark the new one finished.
+var speechGen = 0;
+var speakDone = true;
 
 function unlockAudio() {
     if (!audioCtx) {
@@ -227,7 +241,65 @@ function unlockAudio() {
         src.start(0);
     }
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    // A tap that unlocks sound also unlocks speech, so a later prompt can play on iOS.
+    primeSpeech();
     return audioCtx;
+}
+
+function voiceScore(v) {
+    var name = (v.name || '').toLowerCase();
+    var lang = (v.lang || '').toLowerCase();
+    if (lang.indexOf('en') !== 0) return -1;
+    var score = 0;
+    if (lang === 'en-us') score += 20;
+    else score += 8;
+    // iOS labels the clearer downloads Enhanced or Premium. Compact is the thin one.
+    if (/enhanced|premium/.test(name) && name.indexOf('compact') === -1) score += 40;
+    if (name.indexOf('samantha') !== -1) score += 30;
+    else if (/ava|allison|nicky|susan|zoe|karen|moira/.test(name)) score += 24;
+    else if (name.indexOf('google us english') !== -1) score += 18;
+    else if (/aria|jenny|sara/.test(name)) score += 16;
+    else if (name.indexOf('female') !== -1) score += 6;
+    if (v.localService) score += 4;
+    return score;
+}
+
+function pickVoice() {
+    if (!window.speechSynthesis) return null;
+    var voices = window.speechSynthesis.getVoices() || [];
+    if (!voices.length) return preferredVoice;
+    var best = null;
+    var bestScore = -1;
+    for (var i = 0; i < voices.length; i++) {
+        var score = voiceScore(voices[i]);
+        if (score > bestScore) {
+            bestScore = score;
+            best = voices[i];
+        }
+    }
+    preferredVoice = best || voices[0];
+    return preferredVoice;
+}
+
+if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = function () { pickVoice(); };
+    pickVoice();
+}
+
+// Called from a user tap. A silent utterance lets the real prompt speak later on iOS.
+function primeSpeech() {
+    if (!window.speechSynthesis || speechUnlocked) return;
+    speechUnlocked = true;
+    try {
+        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+        var u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        u.rate = 2;
+        u.lang = 'en-US';
+        window.speechSynthesis.speak(u);
+    } catch (e) {
+        speechUnlocked = false;
+    }
 }
 
 function stopSound() {
@@ -236,6 +308,64 @@ function stopSound() {
         currentAudio.currentTime = 0;
         currentAudio = null;
     }
+    // Drop a prompt that has not started, and one that is still talking.
+    speechSeq++;
+    speechTimers.forEach(function (id) { clearTimeout(id); });
+    speechTimers = [];
+    if (window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+        window.speechSynthesis.cancel();
+        // cancel() outside a tap blocks the next speak on iOS, so the next tap primes again.
+        speechUnlocked = false;
+    }
+}
+
+function speak(text, opts) {
+    opts = opts || {};
+    if (!window.speechSynthesis || !text) return;
+    if (window.speechSynthesis.paused) {
+        try { window.speechSynthesis.resume(); } catch (e) {}
+    }
+    // Cancelling and then speaking outside the original tap is dropped on iOS.
+    if (opts.cancel !== false && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+        window.speechSynthesis.cancel();
+    }
+    var u = new SpeechSynthesisUtterance(text);
+    u.rate = opts.rate != null ? opts.rate : 0.9;
+    u.pitch = opts.pitch != null ? opts.pitch : 1.05;
+    u.lang = 'en-US';
+    var voice = pickVoice();
+    if (voice) u.voice = voice;
+    var gen = ++speechGen;
+    speakDone = false;
+    function finish() {
+        if (gen === speechGen) speakDone = true;
+    }
+    u.onend = finish;
+    u.onerror = finish;
+    window.speechSynthesis.speak(u);
+}
+
+function scheduleSpeech(fn, delay) {
+    var id = setTimeout(fn, delay);
+    speechTimers.push(id);
+    return id;
+}
+
+// The question is on screen before this speaks. An answer tap clears the timer
+// first, so the prompt never talks over the Yes chime.
+function queuePrompt(trackName, text, opts, delay) {
+    primeSpeech();
+    scheduleSpeech(function () {
+        if (track !== trackName || mode !== 'PLAY' || coolingDown) return;
+        // Queue behind the silent unlock. Cancelling here would drop this line on iOS.
+        var next = {};
+        if (opts) {
+            next.rate = opts.rate;
+            next.pitch = opts.pitch;
+        }
+        next.cancel = false;
+        speak(text, next);
+    }, delay);
 }
 
 function getLetterAudio(entry) {
@@ -930,6 +1060,8 @@ function nextCountingRound() {
     quizAnswer = countItems;
     mode = 'PLAY';
     render();
+    // Held so an answer tap cancels it before it can speak over the Yes chime.
+    queuePrompt('counting', 'how many?', { rate: 0.95 }, 250);
 }
 
 function renderCounting() {
@@ -939,10 +1071,15 @@ function renderCounting() {
         return renderNumDone(screen, 'Counting', startCounting);
     }
 
-    const stage = el('div', 'letter-stage');
+    const stage = el('button', 'letter-stage');
+    stage.type = 'button';
     stage.innerHTML =
         dotsHtml(countItems) +
-        '<span class="hint">How many?</span>';
+        '<span class="hint">How many? Tap to count</span>';
+    stage.onclick = function () {
+        if (coolingDown) return;
+        countOutLoud(countItems);
+    };
     screen.appendChild(stage);
 
     const row = el('div', 'big-actions row');
@@ -955,6 +1092,61 @@ function renderCounting() {
     screen.appendChild(row);
     screen.appendChild(homeLink('Back', goNumbersMenu));
     app.appendChild(screen);
+}
+
+function countOutLoud(n) {
+    stopSound();
+    unlockAudio();
+    var mySeq = speechSeq;
+    var i = 1;
+
+    function sayWord(word, done) {
+        if (mySeq !== speechSeq) return;
+        if (!window.speechSynthesis) {
+            done();
+            return;
+        }
+        if (window.speechSynthesis.paused) {
+            try { window.speechSynthesis.resume(); } catch (e) {}
+        }
+        var u = new SpeechSynthesisUtterance(word);
+        u.rate = 0.88;
+        u.pitch = 1.08;
+        u.lang = 'en-US';
+        var voice = pickVoice();
+        if (voice) u.voice = voice;
+        u.onend = function () {
+            if (mySeq !== speechSeq) return;
+            scheduleSpeech(done, 120);
+        };
+        u.onerror = function () {
+            if (mySeq !== speechSeq) return;
+            scheduleSpeech(done, 120);
+        };
+        window.speechSynthesis.speak(u);
+    }
+
+    function step() {
+        if (mySeq !== speechSeq) return;
+        if (i > n) {
+            scheduleSpeech(function () {
+                if (mySeq !== speechSeq) return;
+                sayWord(NUMBER_WORDS[n] || String(n), function () {});
+            }, 180);
+            return;
+        }
+        sayWord(NUMBER_WORDS[i] || String(i), function () {
+            i++;
+            step();
+        });
+    }
+    step();
+}
+
+function sayCorrectCount(n) {
+    stopSound();
+    unlockAudio();
+    speak('there are ' + (NUMBER_WORDS[n] || String(n)), { rate: 0.88 });
 }
 
 function onCountPick(n) {
@@ -973,7 +1165,10 @@ function onCountPick(n) {
             nextCountingRound();
         });
     } else {
-        wrongCooldown();
+        wrongCooldown(function () {
+            if (track !== 'counting') return;
+            sayCorrectCount(countItems);
+        });
     }
 }
 
@@ -999,6 +1194,7 @@ function pickAddends(maxSum) {
 }
 
 function nextAdditionRound() {
+    stopSound();
     var pair = pickAddends(addMax);
     mathA = pair[0];
     mathB = pair[1];
@@ -1010,6 +1206,7 @@ function nextAdditionRound() {
     quizOptions = shuffle(Array.from(opts));
     mode = 'PLAY';
     render();
+    queuePrompt('addition', NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 }, 280);
 }
 
 function renderAddition() {
@@ -1018,13 +1215,19 @@ function renderAddition() {
         return renderNumDone(screen, 'Adding', startAddition);
     }
 
-    const stage = el('div', 'letter-stage');
+    const stage = el('button', 'letter-stage');
+    stage.type = 'button';
     stage.innerHTML =
         '<div class="math-row">' +
         '<div class="math-group">' + dotsHtml(mathA) + '<span class="math-num numeral">' + mathA + '</span></div>' +
         '<span class="math-op">+</span>' +
         '<div class="math-group">' + dotsHtml(mathB) + '<span class="math-num numeral">' + mathB + '</span></div>' +
-        '</div>';
+        '</div>' +
+        '<span class="hint">Tap to hear</span>';
+    stage.onclick = function () {
+        if (coolingDown) return;
+        speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
+    };
     screen.appendChild(stage);
 
     const row = el('div', 'big-actions row');
@@ -1055,7 +1258,10 @@ function onAddPick(n) {
             nextAdditionRound();
         });
     } else {
-        wrongCooldown();
+        wrongCooldown(function () {
+            if (track !== 'addition') return;
+            speak(NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 });
+        });
     }
 }
 
@@ -1068,6 +1274,7 @@ function startCompare() {
 }
 
 function nextCompareRound() {
+    stopSound();
     do {
         compareLeft = Math.floor(Math.random() * 8) + 1;
         compareRight = Math.floor(Math.random() * 8) + 1;
@@ -1075,6 +1282,7 @@ function nextCompareRound() {
     quizAnswer = compareLeft > compareRight ? 'LEFT' : 'RIGHT';
     mode = 'PLAY';
     render();
+    queuePrompt('compare', 'which is bigger?', { rate: 0.95 }, 250);
 }
 
 function renderCompare() {
@@ -1123,7 +1331,10 @@ function onComparePick(side) {
             nextCompareRound();
         });
     } else {
-        wrongCooldown();
+        wrongCooldown(function () {
+            if (track !== 'compare') return;
+            speak('which is bigger?', { rate: 0.95 });
+        });
     }
 }
 
