@@ -1,11 +1,18 @@
 /**
- * Learning Terminal. Letters (Phonics, Words) and Numbers practice.
+ * Learning Terminal. Letters (Phonics, Letter Match, Words) and Numbers practice.
  * Neon look, big simple choices.
  * Letter sounds: Buzzphonics (MIT)
  */
 
 const STORAGE_KEY = 'lt-home-v2';
 const WRONG_MS = 1600;
+const LETTER_WRONG_MS = 800;
+const STARTER = ['S', 'A', 'T', 'P', 'I', 'N'];
+// Letters that look alike. Never offer both as choices in one question.
+const CONFUSABLE_PAIRS = [
+    ['B', 'D'], ['M', 'N'], ['P', 'B'], ['O', 'C'],
+    ['C', 'G'], ['E', 'F'], ['I', 'L'], ['P', 'R']
+];
 
 const LETTERS = [
     { letter: 'S', file: 's', word: 'sun', emoji: '☀️' },
@@ -36,7 +43,7 @@ const NUMBER_WORDS = {
     16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty'
 };
 
-// track: home | letters-menu | sounds | words | numbers-menu | counting | addition | compare
+// track: home | letters-menu | sounds | letters | words | numbers-menu | counting | addition | compare
 // mode: PLAY | DONE | READY (start screen, not saved)
 let track = 'home';
 let mode = 'PLAY';
@@ -77,7 +84,16 @@ const WORDS = [
     { word: 'cap', emoji: '🧢' },
     { word: 'mop', emoji: '🧹' },
     { word: 'leg', emoji: '🦵' },
-    { word: 'pin', emoji: '📌' }
+    { word: 'pin', emoji: '📌' },
+    { word: 'sat', emoji: '🪑' },
+    { word: 'tap', emoji: '🚰' },
+    { word: 'tin', emoji: '🥫' },
+    { word: 'nap', emoji: '😴' },
+    { word: 'pat', emoji: '👏' },
+    { word: 'pit', emoji: '🕳️' },
+    { word: 'sip', emoji: '🧃' },
+    { word: 'ant', emoji: '🐜' },
+    { word: 'sit', emoji: '🧘' }
 ];
 
 const WORD_LETTERS = ['S', 'A', 'T', 'P', 'I', 'N', 'M', 'D', 'G', 'O', 'C', 'E', 'U', 'R', 'H', 'B', 'F', 'L'];
@@ -110,6 +126,18 @@ let compareLeft = 0;
 let compareRight = 0;
 // Last menu to reopen after a reload. Never a mid-question screen.
 let savedScreen = 'home';
+// Letters answered correctly at least once. The practice set grows from SATPIN.
+let mastered = {};
+// Most recently practiced letters, newest first. Preferred as distractors.
+let recent = [];
+// Star level for each letter game. 1 Easy, 2 Medium, 3 Harder.
+let levels = { sounds: 1, letters: 2, words: 3 };
+// Missed letters to ask again soon, within this session only.
+let bringBack = [];
+let missedThis = {};
+let roundIndex = 0;
+let lastAsked = '';
+let queuedLetter = '';
 
 function clampQuestions(n) {
     var v = parseInt(n, 10);
@@ -121,6 +149,55 @@ function clampAddMax(n) {
     var v = parseInt(n, 10);
     if (v >= 5 && v <= 20) return v;
     return 8;
+}
+
+function clampLevel(n) {
+    var v = parseInt(n, 10);
+    if (v === 1 || v === 2 || v === 3) return v;
+    return 0;
+}
+
+function defaultLevels() {
+    return { sounds: 1, letters: 2, words: 3 };
+}
+
+function sanitizeLevels(raw) {
+    var next = defaultLevels();
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return next;
+    ['sounds', 'letters', 'words'].forEach(function (key) {
+        var v = clampLevel(raw[key]);
+        if (v) next[key] = v;
+    });
+    return next;
+}
+
+function sanitizeLetterList(raw) {
+    var known = {};
+    LETTERS.forEach(function (L) { known[L.letter] = true; });
+    var list = [];
+    if (!Array.isArray(raw)) return list;
+    raw.forEach(function (ch) {
+        if (typeof ch !== 'string') return;
+        var up = ch.toUpperCase();
+        if (known[up] && list.indexOf(up) === -1) list.push(up);
+    });
+    return list;
+}
+
+function listToMap(list) {
+    var map = {};
+    list.forEach(function (letter) { map[letter] = true; });
+    return map;
+}
+
+function readStore() {
+    try {
+        var p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
+        return p;
+    } catch (e) {
+        return null;
+    }
 }
 
 function isMenuScreen(s) {
@@ -147,21 +224,41 @@ function menuFromSave(p) {
     return 'home';
 }
 
+function applyStore(p) {
+    questionCount = clampQuestions(p && p.questionCount);
+    addMax = clampAddMax(p && p.addMax);
+    savedScreen = menuFromSave(p);
+    var masteredList = sanitizeLetterList(p && p.phonicsMastered);
+    if (!masteredList.length && p && typeof p.letterIndex === 'number' && isFinite(p.letterIndex)) {
+        var n = Math.max(0, Math.min(LETTERS.length, Math.floor(p.letterIndex)));
+        for (var i = 0; i < n; i++) masteredList.push(LETTERS[i].letter);
+    }
+    mastered = listToMap(masteredList);
+    recent = sanitizeLetterList(p && p.phonicsRecent).slice(0, 8);
+    levels = sanitizeLevels(p && p.levels);
+}
+
 function load() {
-    try {
-        const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        questionCount = clampQuestions(p.questionCount);
-        addMax = clampAddMax(p.addMax);
-        savedScreen = menuFromSave(p);
-    } catch (e) { /* ignore */ }
+    var p = readStore();
+    if (!p) return;
+    applyStore(p);
 }
 
 function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        questionCount: questionCount,
-        addMax: addMax,
-        screen: savedScreen
-    }));
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            questionCount: questionCount,
+            addMax: addMax,
+            screen: savedScreen,
+            phonicsMastered: Object.keys(mastered),
+            phonicsRecent: recent.slice(0, 8),
+            levels: {
+                sounds: levels.sounds,
+                letters: levels.letters,
+                words: levels.words
+            }
+        }));
+    } catch (e) { /* ignore a full or blocked store */ }
 }
 
 // Scores lived in lt-scores-v1. Letter Match also stored letterIndex, and
@@ -172,17 +269,19 @@ function clearStaleScores() {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return;
         const p = JSON.parse(raw);
-        if (!p || typeof p !== 'object') return;
+        if (!p || typeof p !== 'object' || Array.isArray(p)) {
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+        }
         var stale = ('letterCorrect' in p) || ('letterIncorrect' in p) ||
             ('letterIndex' in p) || isLetterMatchScreen(p.screen) ||
             isRemovedTypeScreen(p.screen);
         if (!stale) return;
-        const next = {};
-        if (p.questionCount != null) next.questionCount = clampQuestions(p.questionCount);
-        if (p.addMax != null) next.addMax = clampAddMax(p.addMax);
-        next.screen = menuFromSave(p);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch (e) { /* ignore */ }
+        applyStore(p);
+        save();
+    } catch (e) {
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e2) { /* ignore */ }
+    }
 }
 
 // ——— Audio ———
@@ -432,6 +531,12 @@ function playNo() {
     tone(220, t + 0.1, 0.18, 'triangle', 0.06);
 }
 
+function playSoftNo() {
+    const t = unlockAudio().currentTime;
+    tone(494, t, 0.1, 'sine', 0.035);
+    tone(392, t + 0.09, 0.14, 'sine', 0.03);
+}
+
 /** Speak the number word; soft count beeps after for counting practice */
 function playNumberVoice(n, withBeeps) {
     stopSound();
@@ -570,9 +675,32 @@ function addMaxControl() {
     return row;
 }
 
-function settingsCard(withAddMax) {
+function levelControl(levelKey) {
+    const row = el('div', 'question-row');
+    row.appendChild(el('span', 'question-label', 'Level'));
+    const sel = el('select', 'question-select level-select');
+    sel.setAttribute('aria-label', 'Level');
+    ['Easy', 'Medium', 'Harder'].forEach(function (name, i) {
+        const opt = el('option', '', name);
+        opt.value = String(i + 1);
+        sel.appendChild(opt);
+    });
+    sel.value = String(levels[levelKey] || 1);
+    sel.onchange = function () {
+        var v = clampLevel(sel.value);
+        if (!v) v = 1;
+        levels[levelKey] = v;
+        sel.value = String(v);
+        save();
+    };
+    row.appendChild(selectWrap(sel));
+    return row;
+}
+
+function settingsCard(withAddMax, levelKey) {
     const card = el('div', 'settings-card');
     card.appendChild(questionsControl());
+    if (levelKey) card.appendChild(levelControl(levelKey));
     if (withAddMax) card.appendChild(addMaxControl());
     return card;
 }
@@ -616,14 +744,16 @@ let startTitle = '';
 let startBegin = null;
 let startBack = null;
 let startWithAdd = false;
+let startLevelKey = '';
 
-function showGameStart(trackId, title, begin, back, withAddMax) {
+function showGameStart(trackId, title, begin, back, withAddMax, levelKey) {
     track = trackId;
     mode = 'READY';
     startTitle = title;
     startBegin = begin;
     startBack = back;
     startWithAdd = !!withAddMax;
+    startLevelKey = levelKey || '';
     stopSound();
     coolingDown = false;
     render();
@@ -632,7 +762,7 @@ function showGameStart(trackId, title, begin, back, withAddMax) {
 function renderGameStart() {
     const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', startTitle));
-    screen.appendChild(settingsCard(startWithAdd));
+    screen.appendChild(settingsCard(startWithAdd, startLevelKey));
     const start = el('button', 'big-btn primary', 'Start');
     start.type = 'button';
     start.onclick = function () {
@@ -646,12 +776,12 @@ function renderGameStart() {
 
 function render() {
     app.innerHTML = '';
-    if (mode === 'READY' && (track === 'sounds' || track === 'words' || track === 'counting' || track === 'addition' || track === 'compare')) {
+    if (mode === 'READY' && (track === 'sounds' || track === 'letters' || track === 'words' || track === 'counting' || track === 'addition' || track === 'compare')) {
         return renderGameStart();
     }
     if (track === 'home') return renderHome();
     if (track === 'letters-menu') return renderLettersMenu();
-    if (track === 'sounds') return renderSounds();
+    if (track === 'sounds' || track === 'letters') return renderLetterPractice();
     if (track === 'words') return renderWords();
     if (track === 'numbers-menu') return renderNumbersMenu();
     if (track === 'counting') return renderCounting();
@@ -669,7 +799,7 @@ function renderHome() {
 
     const letters = el('button', 'big-btn home-letters home-choice');
     letters.type = 'button';
-    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">2 games</span>';
+    letters.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letters</span><span class="home-level">3 games</span>';
     letters.onclick = function () {
         unlockAudio();
         goLettersMenu();
@@ -703,19 +833,27 @@ function renderLettersMenu() {
 
     const phonics = el('button', 'big-btn primary home-choice');
     phonics.type = 'button';
-    phonics.innerHTML = '<span class="home-icon">🔊</span><span>Phonics</span>' + levelHtml(1);
+    phonics.innerHTML = '<span class="home-icon">🔊</span><span>Phonics</span>' + levelHtml(levels.sounds);
     phonics.onclick = function () {
-        showGameStart('sounds', 'Phonics', startSounds, goLettersMenu, false);
+        showGameStart('sounds', 'Phonics', startSounds, goLettersMenu, false, 'sounds');
+    };
+
+    const match = el('button', 'big-btn home-letters home-choice');
+    match.type = 'button';
+    match.innerHTML = '<span class="home-icon case-keep">Aa</span><span>Letter Match</span>' + levelHtml(levels.letters);
+    match.onclick = function () {
+        showGameStart('letters', 'Letter Match', startMatch, goLettersMenu, false, 'letters');
     };
 
     const words = el('button', 'big-btn home-words home-choice');
     words.type = 'button';
-    words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>' + levelHtml(3);
+    words.innerHTML = '<span class="home-icon">Abc</span><span>Words</span>' + levelHtml(levels.words);
     words.onclick = function () {
-        showGameStart('words', 'Words', startWords, goLettersMenu, false);
+        showGameStart('words', 'Words', startWords, goLettersMenu, false, 'words');
     };
 
     col.appendChild(phonics);
+    col.appendChild(match);
     col.appendChild(words);
     screen.appendChild(col);
     screen.appendChild(homeLink('Back', goHome));
@@ -757,7 +895,7 @@ function renderNumbersMenu() {
     app.appendChild(screen);
 }
 
-// ——— Sounds: hear the phonics sound, pick the letter ———
+// ——— Phonics and Letter Match: pick the letter ———
 function sameSoundFile(a, b) {
     var ea = null;
     var eb = null;
@@ -768,104 +906,286 @@ function sameSoundFile(a, b) {
     return !!(ea && eb && ea.file === eb.file);
 }
 
-function startSounds() {
-    track = 'sounds';
-    coolingDown = false;
-    soundQueue = takeRounds(LETTERS, questionCount);
-    soundPos = 0;
-    nextSoundRound();
+function isConfusable(a, b) {
+    for (var i = 0; i < CONFUSABLE_PAIRS.length; i++) {
+        var pair = CONFUSABLE_PAIRS[i];
+        if ((pair[0] === a && pair[1] === b) || (pair[0] === b && pair[1] === a)) return true;
+    }
+    return false;
 }
 
-function nextSoundRound(deferSound) {
+function letterOrder() {
+    return LETTERS.map(function (L) { return L.letter; });
+}
+
+function choiceCount(level) {
+    if (level >= 3) return 4;
+    if (level === 2) return 3;
+    return 2;
+}
+
+// SATPIN first. Two new letters join only after every current one has been correct.
+function growingSet(known) {
+    var order = letterOrder();
+    var avail = STARTER.slice();
+    var i = STARTER.length;
+    while (i < order.length) {
+        var ready = true;
+        for (var k = 0; k < avail.length; k++) {
+            if (!known[avail[k]]) { ready = false; break; }
+        }
+        if (!ready) break;
+        avail.push(order[i]);
+        if (i + 1 < order.length) avail.push(order[i + 1]);
+        i += 2;
+    }
+    return avail;
+}
+
+function poolFor(level, known) {
+    var growing = growingSet(known);
+    if (level >= 3) return letterOrder();
+    if (level === 2) {
+        var order = letterOrder();
+        var set = growing.slice();
+        var goal = Math.max(growing.length + 4, 10);
+        for (var i = 0; i < order.length && set.length < goal; i++) {
+            if (set.indexOf(order[i]) === -1) set.push(order[i]);
+        }
+        return set;
+    }
+    return growing;
+}
+
+function levelKeyFor(which) {
+    if (which === 'letters') return 'letters';
+    if (which === 'words') return 'words';
+    return 'sounds';
+}
+
+function currentLevel() {
+    return levels[levelKeyFor(track)] || 1;
+}
+
+function pickPracticeLetter(pool) {
+    var i;
+    for (i = 0; i < bringBack.length; i++) {
+        if (bringBack[i].wait > 0) bringBack[i].wait -= 1;
+    }
+    for (i = 0; i < bringBack.length; i++) {
+        var item = bringBack[i];
+        if (pool.indexOf(item.letter) === -1) {
+            bringBack.splice(i, 1);
+            i--;
+            continue;
+        }
+        if (item.wait <= 0 && item.letter !== lastAsked) {
+            bringBack.splice(i, 1);
+            return item.letter;
+        }
+    }
+    var fresh = pool.filter(function (letter) { return !mastered[letter] && letter !== lastAsked; });
+    var rest = pool.filter(function (letter) { return letter !== lastAsked; });
+    var bag = fresh.length ? fresh : (rest.length ? rest : pool);
+    return bag[Math.floor(Math.random() * bag.length)];
+}
+
+function pickDistractors(answer, pool, count, recentList) {
+    var chosen = [];
+    function ok(letter) {
+        if (!letter || letter === answer || chosen.indexOf(letter) !== -1) return false;
+        if (sameSoundFile(answer, letter)) return false;
+        if (isConfusable(answer, letter)) return false;
+        for (var i = 0; i < chosen.length; i++) {
+            if (isConfusable(chosen[i], letter) || sameSoundFile(chosen[i], letter)) return false;
+        }
+        return true;
+    }
+    function take(list) {
+        for (var i = 0; i < list.length && chosen.length < count; i++) {
+            if (ok(list[i])) chosen.push(list[i]);
+        }
+    }
+    var preferred = [];
+    recentList.forEach(function (letter) {
+        if (pool.indexOf(letter) !== -1 && preferred.indexOf(letter) === -1) preferred.push(letter);
+    });
+    take(preferred);
+    take(shuffle(pool.filter(function (letter) { return preferred.indexOf(letter) === -1; })));
+    take(shuffle(letterOrder()));
+    return chosen;
+}
+
+function choiceRow(letters, onPick) {
+    var row = el('div', 'big-actions' + (letters.length > 2 ? ' choices' : ' row'));
+    letters.forEach(function (letter) {
+        var btn = el('button', 'big-btn letter-choice', letter);
+        btn.type = 'button';
+        btn.onclick = function () { onPick(letter, btn); };
+        row.appendChild(btn);
+    });
+    return row;
+}
+
+function fadeWrong(button, after) {
     stopSound();
-    if (soundPos >= soundQueue.length) {
+    playSoftNo();
+    coolingDown = true;
+    if (button) button.classList.add('choice-fade');
+    setTimeout(function () {
+        coolingDown = false;
+        if (button && button.classList) button.classList.remove('choice-fade');
+        if (after) after();
+    }, LETTER_WRONG_MS);
+}
+
+function showTie(entry, nextFn) {
+    coolingDown = true;
+    var stage = app.querySelector('.letter-stage');
+    if (stage) {
+        stage.classList.remove('pulse');
+        stage.onclick = null;
+        stage.innerHTML =
+            '<span class="stage-emoji">' + entry.emoji + '</span>' +
+            '<span class="tie-letter">' + entry.letter + '</span>' +
+            '<span class="tie-word">' + entry.word + '</span>';
+    }
+    var choices = app.querySelector('.big-actions');
+    if (choices) choices.classList.add('hidden');
+    playYes();
+    playLetter(entry);
+    setTimeout(function () {
+        coolingDown = false;
+        if (nextFn) nextFn();
+    }, 1200);
+}
+
+function startLetterPractice(which) {
+    track = which;
+    coolingDown = false;
+    roundIndex = 0;
+    bringBack = [];
+    missedThis = {};
+    lastAsked = '';
+    queuedLetter = '';
+    nextLetterRound(false);
+}
+
+function startSounds() {
+    startLetterPractice('sounds');
+}
+
+function startMatch() {
+    startLetterPractice('letters');
+}
+
+function nextLetterRound(deferSound) {
+    stopSound();
+    if (roundIndex >= questionCount) {
         mode = 'DONE';
         render();
         playYes();
         return;
     }
-    var item = soundQueue[soundPos];
-    quizAnswer = item.letter;
-    var wrong = item.letter;
-    var guard = 0;
-    while ((wrong === item.letter || sameSoundFile(item.letter, wrong)) && guard < 80) {
-        wrong = LETTERS[Math.floor(Math.random() * LETTERS.length)].letter;
-        guard++;
-    }
-    quizOptions = shuffle([quizAnswer, wrong]);
+    var letter = queuedLetter;
+    queuedLetter = '';
+    if (!letter) letter = pickPracticeLetter(poolFor(currentLevel(), mastered));
+    lastAsked = letter;
+    beginLetterQuestion(letter, deferSound);
+}
+
+function beginLetterQuestion(letter, deferSound) {
+    var entry = letterEntry(letter);
+    quizAnswer = letter;
+    var wrongs = pickDistractors(letter, poolFor(currentLevel(), mastered), choiceCount(currentLevel()) - 1, recent);
+    quizOptions = shuffle([letter].concat(wrongs));
     mode = 'PLAY';
     render();
-    // Inside the tap on the first round. Later rounds were primed on the answer tap.
-    // After a Yes card, the new question is painted before this clip starts.
+    if (track !== 'sounds') return;
     if (deferSound) {
         afterPaint(function () {
-            if (track !== 'sounds' || mode !== 'PLAY') return;
-            playLetter(item);
+            if (track !== 'sounds' || mode !== 'PLAY' || quizAnswer !== letter) return;
+            playLetter(entry);
         });
     } else {
-        playLetter(item);
+        playLetter(entry);
     }
 }
 
-function renderSounds() {
+function renderLetterPractice() {
     const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
-
+    var again = track === 'letters' ? startMatch : startSounds;
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
         screen.appendChild(el('p', 'hint', 'Great job!'));
-        screen.appendChild(settingsCard(false));
-        const again = el('button', 'big-btn primary', 'Again');
-        again.type = 'button';
-        again.onclick = function () {
+        screen.appendChild(settingsCard(false, levelKeyFor(track)));
+        const againBtn = el('button', 'big-btn primary', 'Again');
+        againBtn.type = 'button';
+        againBtn.onclick = function () {
             unlockAudio();
-            startSounds();
+            again();
         };
-        screen.appendChild(again);
+        screen.appendChild(againBtn);
         screen.appendChild(homeLink('Back', goLettersMenu));
         app.appendChild(screen);
         return;
     }
 
-    const answer = soundQueue[soundPos];
-    const prompt = el('button', 'letter-stage pulse');
+    var entry = letterEntry(quizAnswer);
+    var prompt = el('button', 'letter-stage' + (track === 'sounds' ? ' pulse' : ''));
     prompt.type = 'button';
-    prompt.innerHTML =
-        '<span class="stage-speaker">🔊</span>' +
-        '<span class="hint tap-hear">Tap to hear</span>' +
-        '<span class="hint">Which letter?</span>';
+    if (track === 'letters') {
+        prompt.innerHTML =
+            '<span class="stage-emoji">' + entry.emoji + '</span>' +
+            '<span class="hint">Which letter?</span>';
+    } else {
+        prompt.innerHTML =
+            '<span class="stage-speaker">🔊</span>' +
+            '<span class="hint tap-hear">Tap to hear</span>' +
+            '<span class="hint">Which letter?</span>';
+    }
     prompt.onclick = function () {
-        if (!coolingDown) playLetter(answer);
+        if (!coolingDown) playLetter(entry);
     };
     screen.appendChild(prompt);
-
-    const row = el('div', 'big-actions row');
-    quizOptions.forEach(function (L) {
-        const btn = el('button', 'big-btn letter-choice', L);
-        btn.type = 'button';
-        btn.onclick = function () { onSoundPick(L); };
-        row.appendChild(btn);
-    });
-    screen.appendChild(row);
+    screen.appendChild(choiceRow(quizOptions, onLetterPick));
     screen.appendChild(homeLink('Back', goLettersMenu));
     app.appendChild(screen);
 }
 
-function onSoundPick(letter) {
-    if (coolingDown) return;
-    var answer = soundQueue[soundPos];
+function onLetterPick(letter, btn) {
+    if (coolingDown || mode !== 'PLAY') return;
+    if (track !== 'sounds' && track !== 'letters') return;
+    var entry = letterEntry(quizAnswer);
     if (letter === quizAnswer) {
-        stopSound();
-        playYes();
-        if (soundPos + 1 < soundQueue.length) primeLetter(soundQueue[soundPos + 1]);
-        flashYes(function () {
-            if (track !== 'sounds') return;
-            soundPos++;
-            nextSoundRound(true);
+        var wasMiss = !!missedThis[letter];
+        delete missedThis[letter];
+        mastered[letter] = true;
+        recent = [letter].concat(recent.filter(function (item) { return item !== letter; })).slice(0, 8);
+        save();
+        if (wasMiss) {
+            var listed = false;
+            for (var i = 0; i < bringBack.length; i++) {
+                if (bringBack[i].letter === letter) listed = true;
+            }
+            if (!listed) bringBack.push({ letter: letter, wait: 2 });
+        }
+        var upcoming = '';
+        if (roundIndex + 1 < questionCount) {
+            upcoming = pickPracticeLetter(poolFor(currentLevel(), mastered));
+            if (track === 'sounds') primeLetter(letterEntry(upcoming));
+        }
+        queuedLetter = upcoming;
+        showTie(entry, function () {
+            if (track !== 'sounds' && track !== 'letters') return;
+            roundIndex++;
+            nextLetterRound(true);
         });
     } else {
-        wrongCooldown(function () {
-            if (track !== 'sounds') return;
-            playLetter(answer);
+        missedThis[quizAnswer] = true;
+        fadeWrong(btn, function () {
+            if ((track !== 'sounds' && track !== 'letters') || mode !== 'PLAY') return;
+            playLetter(entry);
         });
     }
 }
@@ -1193,11 +1513,45 @@ function letterEntry(ch) {
     return { letter: up, file: up.toLowerCase() };
 }
 
-function tilesFor(word) {
+function wordsForLevel(level) {
+    var pool = poolFor(level, mastered);
+    var list = WORDS.filter(function (item) {
+        if (level >= 3) return true;
+        var chars = item.word.toUpperCase().split('');
+        for (var i = 0; i < chars.length; i++) {
+            if (pool.indexOf(chars[i]) === -1) return false;
+        }
+        return true;
+    });
+    if (list.length >= 4) return list;
+    return WORDS.filter(function (item) {
+        var chars = item.word.toUpperCase().split('');
+        for (var i = 0; i < chars.length; i++) {
+            if (STARTER.indexOf(chars[i]) === -1) return false;
+        }
+        return true;
+    });
+}
+
+function tilesFor(word, level) {
     var need = word.toUpperCase().split('');
-    var extras = shuffle(WORD_LETTERS.filter(function (L) {
-        return need.indexOf(L) === -1;
-    })).slice(0, 3);
+    var extraN = level >= 2 ? 3 : 1;
+    function allowed(letter, relaxLook) {
+        if (need.indexOf(letter) !== -1) return false;
+        for (var i = 0; i < need.length; i++) {
+            if (sameSoundFile(need[i], letter)) return false;
+            if (!relaxLook && isConfusable(need[i], letter)) return false;
+        }
+        return true;
+    }
+    var source = level >= 3 ? WORD_LETTERS : poolFor(level, mastered);
+    var extras = shuffle(source.filter(function (letter) { return allowed(letter, false); })).slice(0, extraN);
+    if (extras.length < extraN) {
+        var more = shuffle(WORD_LETTERS.filter(function (letter) {
+            return allowed(letter, true) && extras.indexOf(letter) === -1;
+        }));
+        while (extras.length < extraN && more.length) extras.push(more.pop());
+    }
     return shuffle(need.concat(extras));
 }
 
@@ -1213,7 +1567,7 @@ function startWords() {
     wordLocked = false;
     track = 'words';
     coolingDown = false;
-    wordQueue = takeRounds(WORDS, questionCount);
+    wordQueue = takeRounds(wordsForLevel(levels.words), questionCount);
     wordPos = 0;
     nextWordRound();
 }
@@ -1230,7 +1584,7 @@ function nextWordRound(deferSound) {
     }
     wordTarget = wordQueue[wordPos];
     wordSpelling = [];
-    wordTiles = tilesFor(wordTarget.word);
+    wordTiles = tilesFor(wordTarget.word, levels.words);
     mode = 'PLAY';
     render();
     // In the tap that opened the round when it is a tap, so speech can start.
@@ -1251,7 +1605,7 @@ function renderWords() {
     if (mode === 'DONE') {
         screen.appendChild(el('div', 'giant-emoji', '⭐'));
         screen.appendChild(el('p', 'hint', 'Great job!'));
-        screen.appendChild(settingsCard(false));
+        screen.appendChild(settingsCard(false, 'words'));
         const again = el('button', 'big-btn primary', 'Again');
         again.type = 'button';
         again.onclick = function () {
@@ -1341,19 +1695,33 @@ function checkWord() {
     if (spelled === target) {
         playYes();
         speak(wordTarget.word, { rate: 0.85, cancel: false });
-        flashYes(function () {
+        coolingDown = true;
+        setTimeout(function () {
+            coolingDown = false;
             if (track !== 'words') return;
             wordPos++;
             nextWordRound(true);
-        });
-    } else {
-        wrongCooldown(function () {
-            if (track !== 'words') return;
-            wordSpelling = [];
-            render();
-            speakWord();
-        });
+        }, 1100);
+        return;
     }
+    stopSound();
+    playSoftNo();
+    coolingDown = true;
+    var letters = target.split('');
+    app.querySelectorAll('.word-slot').forEach(function (slot, i) {
+        if (wordSpelling[i] && wordSpelling[i] !== letters[i]) slot.classList.add('choice-fade');
+    });
+    app.querySelectorAll('.word-tile').forEach(function (btn) {
+        if (btn.disabled) btn.classList.add('choice-fade');
+    });
+    setTimeout(function () {
+        coolingDown = false;
+        wordLocked = false;
+        if (track !== 'words' || mode !== 'PLAY') return;
+        wordSpelling = [];
+        render();
+        speakWord();
+    }, LETTER_WRONG_MS);
 }
 
 function renderNumDone(screen, title, againFn) {
