@@ -7,10 +7,8 @@ Letter and number games for little kids.
 Letters
 
 - Phonics: hear a letter sound, then pick the letter. Starts from S A T P I N.
-- Letter Match: see a picture, then pick the letter.
-- Words: spell a 3-letter word.
 
-Each letter game has an Easy, Medium, or Harder level. The stars on its button match that level.
+Phonics has an Easy, Medium, or Harder level. The stars on its button match that level.
 
 Numbers
 
