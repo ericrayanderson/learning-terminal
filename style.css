@@ -367,11 +367,6 @@ button:disabled { cursor: not-allowed; }
   text-shadow: var(--choice-text-shadow);
 }
 
-.big-btn.choice-fade {
-  opacity: 0.28;
-  transition: opacity 0.18s ease;
-}
-
 .big-btn.letter-choice:active:not(:disabled) {
   color: var(--accent-pink);
   border-color: var(--accent-pink);
@@ -472,7 +467,6 @@ button:disabled { cursor: not-allowed; }
 
 @media (prefers-reduced-motion: reduce) {
   .letter-stage.pulse { animation: none; }
-  .big-btn.choice-fade { transition: none; }
 }
 
 @media (max-width: 380px) {

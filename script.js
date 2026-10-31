@@ -6,7 +6,6 @@
 
 const STORAGE_KEY = 'lt-home-v2';
 const WRONG_MS = 1600;
-const LETTER_WRONG_MS = 800;
 const STARTER = ['S', 'A', 'T', 'P', 'I', 'N'];
 // Letters that look alike. Never offer both as choices in one question.
 const CONFUSABLE_PAIRS = [
@@ -454,12 +453,6 @@ function playNo() {
     tone(220, t + 0.1, 0.18, 'triangle', 0.06);
 }
 
-function playSoftNo() {
-    const t = unlockAudio().currentTime;
-    tone(494, t, 0.1, 'sine', 0.035);
-    tone(392, t + 0.09, 0.14, 'sine', 0.03);
-}
-
 // ——— DOM ———
 const app = document.getElementById('app-container');
 const yesOverlay = document.getElementById('success-overlay');
@@ -902,18 +895,6 @@ function choiceRow(letters, onPick) {
     return row;
 }
 
-function fadeWrong(button, after) {
-    stopSound();
-    playSoftNo();
-    coolingDown = true;
-    if (button) button.classList.add('choice-fade');
-    setTimeout(function () {
-        coolingDown = false;
-        if (button && button.classList) button.classList.remove('choice-fade');
-        if (after) after();
-    }, LETTER_WRONG_MS);
-}
-
 function startLetterPractice(which) {
     track = which;
     coolingDown = false;
@@ -1028,7 +1009,7 @@ function onLetterPick(letter, btn) {
         });
     } else {
         missedThis[quizAnswer] = true;
-        fadeWrong(btn, function () {
+        wrongCooldown(function () {
             if (track !== 'sounds' || mode !== 'PLAY') return;
             playLetter(entry);
         });
