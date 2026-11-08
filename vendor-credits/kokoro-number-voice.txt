@@ -1,0 +1,19 @@
+Spoken numbers 1 to 100 (*.m4a in /sounds/numbers)
+
+These are synthetic voice clips, not human recordings.
+Generated offline with the Kokoro-82M text-to-speech model, voice "af_heart",
+speed 0.9, via kokoro-onnx (model-files-v1.0). Silence trimmed, loudness
+normalized and encoded to AAC with ffmpeg.
+
+Model: Kokoro-82M by hexgrad
+Source: https://huggingface.co/hexgrad/Kokoro-82M
+License: Apache License 2.0 (model weights and voices)
+https://www.apache.org/licenses/LICENSE-2.0
+
+Runtime used to generate: kokoro-onnx by thewh1teagle (MIT License)
+https://github.com/thewh1teagle/kokoro-onnx
+
+Kokoro's model card credits Creative Commons Attribution audio in its
+training data, passed on here:
+- Koniwa (tnc), CC BY 3.0
+- SIWIS, CC BY 4.0

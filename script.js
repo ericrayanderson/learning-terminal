@@ -57,6 +57,9 @@ let questionCount = 10;
 let addMax = 8;
 // How many answers Adding shows. 2, 3 or 4.
 let addChoices = 2;
+// Hear a number: biggest number asked (10 to 100) and how many answers show.
+let hearMax = 10;
+let hearChoices = 2;
 
 // math/count state
 let countItems = 0;
@@ -95,6 +98,12 @@ function clampAddChoices(n) {
     var v = parseInt(n, 10);
     if (v === 2 || v === 3 || v === 4) return v;
     return 2;
+}
+
+function clampHearMax(n) {
+    var v = parseInt(n, 10);
+    if (v >= 10 && v <= 100 && v % 10 === 0) return v;
+    return 10;
 }
 
 function clampLevel(n) {
@@ -172,6 +181,8 @@ function applyStore(p) {
     questionCount = clampQuestions(p && p.questionCount);
     addMax = clampAddMax(p && p.addMax);
     addChoices = clampAddChoices(p && p.addChoices);
+    hearMax = clampHearMax(p && p.hearMax);
+    hearChoices = clampAddChoices(p && p.hearChoices);
     savedScreen = menuFromSave(p);
     var masteredList = sanitizeLetterList(p && p.phonicsMastered);
     if (!masteredList.length && p && typeof p.letterIndex === 'number' && isFinite(p.letterIndex)) {
@@ -195,6 +206,8 @@ function save() {
             questionCount: questionCount,
             addMax: addMax,
             addChoices: addChoices,
+            hearMax: hearMax,
+            hearChoices: hearChoices,
             screen: savedScreen,
             phonicsMastered: Object.keys(mastered),
             phonicsRecent: recent.slice(0, 8),
@@ -605,6 +618,46 @@ function addChoicesControl() {
     return row;
 }
 
+function hearMaxControl() {
+    const row = el('div', 'question-row');
+    row.appendChild(el('span', 'question-label', 'Numbers up to'));
+    const sel = el('select', 'question-select hear-max-select');
+    sel.setAttribute('aria-label', 'Numbers up to');
+    for (var n = 10; n <= 100; n += 10) {
+        const opt = el('option', '', String(n));
+        opt.value = String(n);
+        sel.appendChild(opt);
+    }
+    sel.value = String(hearMax);
+    sel.onchange = function () {
+        hearMax = clampHearMax(sel.value);
+        sel.value = String(hearMax);
+        save();
+    };
+    row.appendChild(selectWrap(sel));
+    return row;
+}
+
+function hearChoicesControl() {
+    const row = el('div', 'question-row');
+    row.appendChild(el('span', 'question-label', 'Answers'));
+    const sel = el('select', 'question-select hear-choices-select');
+    sel.setAttribute('aria-label', 'Answers to choose from');
+    for (var n = 2; n <= 4; n++) {
+        const opt = el('option', '', String(n));
+        opt.value = String(n);
+        sel.appendChild(opt);
+    }
+    sel.value = String(hearChoices);
+    sel.onchange = function () {
+        hearChoices = clampAddChoices(sel.value);
+        sel.value = String(hearChoices);
+        save();
+    };
+    row.appendChild(selectWrap(sel));
+    return row;
+}
+
 function levelControl(levelKey) {
     const row = el('div', 'question-row');
     row.appendChild(el('span', 'question-label', 'Level'));
@@ -627,12 +680,14 @@ function levelControl(levelKey) {
     return row;
 }
 
-function settingsCard(withAddMax, levelKey) {
+function settingsCard(withAddMax, levelKey, withHear) {
     const card = el('div', 'settings-card');
     card.appendChild(questionsControl());
     if (levelKey) card.appendChild(levelControl(levelKey));
     if (withAddMax) card.appendChild(addMaxControl());
     if (withAddMax) card.appendChild(addChoicesControl());
+    if (withHear) card.appendChild(hearMaxControl());
+    if (withHear) card.appendChild(hearChoicesControl());
     return card;
 }
 
@@ -672,6 +727,7 @@ let startBegin = null;
 let startBack = null;
 let startWithAdd = false;
 let startLevelKey = '';
+let startWithHear = false;
 
 function showGameStart(trackId, title, begin, back, withAddMax, levelKey) {
     track = trackId;
@@ -681,6 +737,7 @@ function showGameStart(trackId, title, begin, back, withAddMax, levelKey) {
     startBack = back;
     startWithAdd = !!withAddMax;
     startLevelKey = levelKey || '';
+    startWithHear = trackId === 'hear';
     stopSound();
     coolingDown = false;
     render();
@@ -689,7 +746,7 @@ function showGameStart(trackId, title, begin, back, withAddMax, levelKey) {
 function renderGameStart() {
     const screen = el('div', 'simple-screen menu-screen');
     screen.appendChild(el('p', 'hint', startTitle));
-    screen.appendChild(settingsCard(startWithAdd, startLevelKey));
+    screen.appendChild(settingsCard(startWithAdd, startLevelKey, startWithHear));
     const start = el('button', 'big-btn primary', 'Start');
     start.type = 'button';
     start.onclick = function () {
@@ -703,7 +760,7 @@ function renderGameStart() {
 
 function render() {
     app.innerHTML = '';
-    if (mode === 'READY' && (track === 'sounds' || track === 'counting' || track === 'addition' || track === 'compare')) {
+    if (mode === 'READY' && (track === 'sounds' || track === 'counting' || track === 'addition' || track === 'compare' || track === 'hear')) {
         return renderGameStart();
     }
     if (track === 'home') return renderHome();
@@ -713,6 +770,7 @@ function render() {
     if (track === 'counting') return renderCounting();
     if (track === 'addition') return renderAddition();
     if (track === 'compare') return renderCompare();
+    if (track === 'hear') return renderHear();
 }
 
 function renderHome() {
@@ -733,7 +791,7 @@ function renderHome() {
 
     const numbers = el('button', 'big-btn home-numbers home-choice');
     numbers.type = 'button';
-    numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span><span class="home-level">3 games</span>';
+    numbers.innerHTML = '<span class="home-icon">123</span><span>Numbers</span><span class="home-level">4 games</span>';
     numbers.onclick = function () {
         unlockAudio();
         goNumbersMenu();
@@ -792,7 +850,15 @@ function renderNumbersMenu() {
         showGameStart('compare', 'Which bigger?', startCompare, goNumbersMenu, false);
     };
 
+    const hear = el('button', 'big-btn primary home-choice');
+    hear.type = 'button';
+    hear.innerHTML = '<span class="home-icon">🔊</span><span>Hear a number</span>' + levelHtml(2);
+    hear.onclick = function () {
+        showGameStart('hear', 'Hear a number', startHear, goNumbersMenu, false);
+    };
+
     col.appendChild(counting);
+    col.appendChild(hear);
     col.appendChild(compare);
     col.appendChild(addition);
     screen.appendChild(col);
@@ -1004,6 +1070,7 @@ function renderLetterPractice() {
     };
     screen.appendChild(prompt);
     screen.appendChild(choiceRow(quizOptions, onLetterPick));
+    screen.appendChild(progressStrip());
     screen.appendChild(homeLink('Back', goLettersMenu));
     app.appendChild(screen);
 }
@@ -1033,6 +1100,7 @@ function onLetterPick(letter, btn) {
         queuedLetter = upcoming;
         stopSound();
         playYes();
+        fillProgress(roundDone() + 1);
         flashYes(function () {
             if (track !== 'sounds') return;
             roundIndex++;
@@ -1097,6 +1165,7 @@ function renderCounting() {
         row.appendChild(btn);
     });
     screen.appendChild(row);
+    screen.appendChild(progressStrip());
     screen.appendChild(homeLink('Back', goNumbersMenu));
     app.appendChild(screen);
 }
@@ -1161,6 +1230,7 @@ function onCountPick(n) {
     if (n === quizAnswer) {
         stopSound();
         playYes();
+        fillProgress(roundDone() + 1);
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
@@ -1202,8 +1272,8 @@ function pickAddends(maxSum) {
 
 // Wrong answers for Adding: distinct, never the answer, from 1 to the cap.
 // Numbers close to the answer are more likely, so the choices stay plausible.
-function addDistractors(answer, maxSum, count) {
-    var top = Math.max(maxSum, answer + count, count + 1);
+function addDistractors(answer, maxSum, count, strictTop) {
+    var top = strictTop ? maxSum : Math.max(maxSum, answer + count, count + 1);
     var pool = [];
     for (var n = 1; n <= top; n++) {
         if (n !== answer) pool.push({ n: n, w: Math.abs(n - answer) + Math.random() * 3 });
@@ -1253,6 +1323,7 @@ function renderAddition() {
         row.appendChild(btn);
     });
     screen.appendChild(row);
+    screen.appendChild(progressStrip());
     screen.appendChild(homeLink('Back', goNumbersMenu));
     app.appendChild(screen);
 }
@@ -1262,6 +1333,7 @@ function onAddPick(n) {
     if (n === quizAnswer) {
         stopSound();
         playYes();
+        fillProgress(roundDone() + 1);
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
@@ -1326,6 +1398,7 @@ function renderCompare() {
     row.appendChild(left);
     row.appendChild(right);
     screen.appendChild(row);
+    screen.appendChild(progressStrip());
     screen.appendChild(homeLink('Back', goNumbersMenu));
     app.appendChild(screen);
 }
@@ -1335,6 +1408,7 @@ function onComparePick(side) {
     if (side === quizAnswer) {
         stopSound();
         playYes();
+        fillProgress(roundDone() + 1);
         flashYes(function () {
             turnsLeft--;
             if (turnsLeft <= 0) {
@@ -1353,6 +1427,106 @@ function onComparePick(side) {
     }
 }
 
+// ——— Hear a number: hear it, pick the numeral ———
+function numberEntry(n) {
+    return { file: 'numbers/' + n };
+}
+
+function startHear() {
+    track = 'hear';
+    turnsTotal = questionCount;
+    turnsLeft = questionCount;
+    nextHearRound(false);
+}
+
+function pickHearNumber(max, avoid) {
+    var n;
+    do {
+        n = Math.floor(Math.random() * max) + 1;
+    } while (n === avoid && max > 1);
+    return n;
+}
+
+function nextHearRound(deferSound, upcoming) {
+    stopSound();
+    quizAnswer = upcoming || pickHearNumber(hearMax, quizAnswer);
+    quizOptions = shuffle([quizAnswer].concat(addDistractors(quizAnswer, hearMax, hearChoices - 1, true)));
+    mode = 'PLAY';
+    render();
+    var n = quizAnswer;
+    if (deferSound) {
+        afterPaint(function () {
+            if (track !== 'hear' || mode !== 'PLAY' || quizAnswer !== n) return;
+            playLetter(numberEntry(n));
+        });
+    } else {
+        playLetter(numberEntry(n));
+    }
+}
+
+function renderHear() {
+    const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
+    if (mode === 'DONE') {
+        return renderNumDone(screen, 'Hear a number', function () {
+            unlockAudio();
+            startHear();
+        });
+    }
+    var n = quizAnswer;
+    var prompt = el('button', 'letter-stage pulse');
+    prompt.type = 'button';
+    prompt.innerHTML =
+        '<span class="stage-speaker">🔊</span>' +
+        '<span class="hint tap-hear">Tap to hear</span>' +
+        '<span class="hint">Which number?</span>';
+    prompt.onclick = function () {
+        if (!coolingDown) playLetter(numberEntry(n));
+    };
+    screen.appendChild(prompt);
+    const row = el('div', 'big-actions' + (quizOptions.length > 2 ? ' choices' : ' row'));
+    quizOptions.forEach(function (opt) {
+        const btn = el('button', 'big-btn letter-choice numeral', String(opt));
+        btn.type = 'button';
+        btn.onclick = function () { onHearPick(opt); };
+        row.appendChild(btn);
+    });
+    screen.appendChild(row);
+    screen.appendChild(progressStrip());
+    screen.appendChild(homeLink('Back', goNumbersMenu));
+    app.appendChild(screen);
+}
+
+function onHearPick(n) {
+    if (coolingDown || mode !== 'PLAY' || track !== 'hear') return;
+    var answer = quizAnswer;
+    if (n === answer) {
+        var upcoming = 0;
+        if (turnsLeft > 1) {
+            upcoming = pickHearNumber(hearMax, answer);
+            primeLetter(numberEntry(upcoming));
+        }
+        stopSound();
+        playYes();
+        fillProgress(roundDone() + 1);
+        flashYes(function () {
+            if (track !== 'hear') return;
+            turnsLeft--;
+            if (turnsLeft <= 0) {
+                mode = 'DONE';
+                render();
+                playYes();
+                return;
+            }
+            nextHearRound(true, upcoming);
+        });
+    } else {
+        wrongCooldown(function () {
+            if (track !== 'hear' || mode !== 'PLAY') return;
+            playLetter(numberEntry(answer));
+        });
+    }
+}
+
 function letterEntry(ch) {
     var up = String(ch).toUpperCase();
     for (var i = 0; i < LETTERS.length; i++) {
@@ -1364,7 +1538,7 @@ function letterEntry(ch) {
 function renderNumDone(screen, title, againFn) {
     screen.appendChild(el('div', 'giant-emoji', '⭐'));
     screen.appendChild(el('p', 'hint', 'Great job!'));
-    screen.appendChild(settingsCard(title === 'Adding'));
+    screen.appendChild(settingsCard(title === 'Adding', '', title === 'Hear a number'));
     const again = el('button', 'big-btn primary', 'Again');
     again.type = 'button';
     again.onclick = againFn;
@@ -1381,6 +1555,45 @@ function afterPaint(fn) {
     requestAnimationFrame(function () {
         requestAnimationFrame(fn);
     });
+}
+
+// ——— Round progress: one small box per question, filled when it is done ———
+function roundTotal() {
+    return track === 'sounds' ? questionCount : turnsTotal;
+}
+
+function roundDone() {
+    return track === 'sounds' ? roundIndex : turnsTotal - turnsLeft;
+}
+
+function progressStrip() {
+    var total = roundTotal();
+    var done = Math.max(0, Math.min(total, roundDone()));
+    const strip = el('div', 'round-progress');
+    strip.setAttribute('role', 'progressbar');
+    strip.setAttribute('aria-label', 'Questions done');
+    strip.setAttribute('aria-valuemin', '0');
+    strip.setAttribute('aria-valuemax', String(total));
+    for (var i = 0; i < total; i++) {
+        strip.appendChild(el('span', 'round-box' + (i < done ? ' done' : '')));
+    }
+    setProgress(strip, done, total);
+    return strip;
+}
+
+function setProgress(strip, done, total) {
+    strip.setAttribute('aria-valuenow', String(done));
+    strip.setAttribute('aria-valuetext', done + ' of ' + total + ' done');
+    strip.querySelectorAll('.round-box').forEach(function (b, i) {
+        b.classList.toggle('done', i < done);
+    });
+}
+
+function fillProgress(done) {
+    var strip = app.querySelector('.round-progress');
+    if (!strip) return;
+    var total = roundTotal();
+    setProgress(strip, Math.max(0, Math.min(total, done)), total);
 }
 
 // ——— Feedback ———

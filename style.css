@@ -432,6 +432,12 @@ button:disabled { cursor: not-allowed; }
   border-color: var(--neon-orange);
   box-shadow: 0 0 28px rgba(255, 107, 44, 0.35);
 }
+.wrong-x {
+  color: var(--accent-orange);
+  display: flex;
+  justify-content: center;
+}
+.wrong-x svg { display: block; }
 .wrong-card h1 {
   color: var(--accent-orange);
   text-shadow: 0 0 12px rgba(255, 107, 44, 0.7);
@@ -881,14 +887,14 @@ button:disabled { cursor: not-allowed; }
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr);
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto auto;
     column-gap: 28px;
     row-gap: 12px;
   }
 
   .play-screen .letter-stage {
     grid-column: 1;
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 3;
     align-self: stretch;
     height: 100%;
     min-height: min(68vh, 620px);
@@ -908,11 +914,41 @@ button:disabled { cursor: not-allowed; }
     grid-template-columns: 1fr 1fr;
   }
 
-  .play-screen .home-link {
+  .play-screen .round-progress {
     grid-column: 2;
     grid-row: 2;
+  }
+
+  .play-screen .home-link {
+    grid-column: 2;
+    grid-row: 3;
     justify-self: center;
   }
 
   .play-screen .big-btn.letter-choice { min-height: 120px; }
+}
+
+/* Round progress: one box per question. */
+.round-progress {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 360px;
+  margin: 4px auto 0;
+}
+.round-box {
+  flex: 0 1 18px;
+  min-width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  border: 1.5px solid var(--muted);
+  opacity: 0.6;
+  box-sizing: border-box;
+}
+.round-box.done {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  opacity: 1;
 }
