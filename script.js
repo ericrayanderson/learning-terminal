@@ -55,6 +55,8 @@ let turnsTotal = 10;
 let questionCount = 10;
 // Biggest sum Adding will ask. 8 is the original 1-4 plus 1-4 cap.
 let addMax = 8;
+// How many answers Adding shows. 2, 3 or 4.
+let addChoices = 2;
 
 // math/count state
 let countItems = 0;
@@ -87,6 +89,12 @@ function clampAddMax(n) {
     var v = parseInt(n, 10);
     if (v >= 5 && v <= 20) return v;
     return 8;
+}
+
+function clampAddChoices(n) {
+    var v = parseInt(n, 10);
+    if (v === 2 || v === 3 || v === 4) return v;
+    return 2;
 }
 
 function clampLevel(n) {
@@ -163,6 +171,7 @@ function menuFromSave(p) {
 function applyStore(p) {
     questionCount = clampQuestions(p && p.questionCount);
     addMax = clampAddMax(p && p.addMax);
+    addChoices = clampAddChoices(p && p.addChoices);
     savedScreen = menuFromSave(p);
     var masteredList = sanitizeLetterList(p && p.phonicsMastered);
     if (!masteredList.length && p && typeof p.letterIndex === 'number' && isFinite(p.letterIndex)) {
@@ -185,6 +194,7 @@ function save() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             questionCount: questionCount,
             addMax: addMax,
+            addChoices: addChoices,
             screen: savedScreen,
             phonicsMastered: Object.keys(mastered),
             phonicsRecent: recent.slice(0, 8),
@@ -575,6 +585,26 @@ function addMaxControl() {
     return row;
 }
 
+function addChoicesControl() {
+    const row = el('div', 'question-row');
+    row.appendChild(el('span', 'question-label', 'Answers'));
+    const sel = el('select', 'question-select add-choices-select');
+    sel.setAttribute('aria-label', 'Answers to choose from');
+    for (var n = 2; n <= 4; n++) {
+        const opt = el('option', '', String(n));
+        opt.value = String(n);
+        sel.appendChild(opt);
+    }
+    sel.value = String(addChoices);
+    sel.onchange = function () {
+        addChoices = clampAddChoices(sel.value);
+        sel.value = String(addChoices);
+        save();
+    };
+    row.appendChild(selectWrap(sel));
+    return row;
+}
+
 function levelControl(levelKey) {
     const row = el('div', 'question-row');
     row.appendChild(el('span', 'question-label', 'Level'));
@@ -602,6 +632,7 @@ function settingsCard(withAddMax, levelKey) {
     card.appendChild(questionsControl());
     if (levelKey) card.appendChild(levelControl(levelKey));
     if (withAddMax) card.appendChild(addMaxControl());
+    if (withAddMax) card.appendChild(addChoicesControl());
     return card;
 }
 
@@ -1169,17 +1200,25 @@ function pickAddends(maxSum) {
     return [a, sum - a];
 }
 
+// Wrong answers for Adding: distinct, never the answer, from 1 to the cap.
+// Numbers close to the answer are more likely, so the choices stay plausible.
+function addDistractors(answer, maxSum, count) {
+    var top = Math.max(maxSum, answer + count, count + 1);
+    var pool = [];
+    for (var n = 1; n <= top; n++) {
+        if (n !== answer) pool.push({ n: n, w: Math.abs(n - answer) + Math.random() * 3 });
+    }
+    pool.sort(function (x, y) { return x.w - y.w; });
+    return pool.slice(0, count).map(function (x) { return x.n; });
+}
+
 function nextAdditionRound() {
     stopSound();
     var pair = pickAddends(addMax);
     mathA = pair[0];
     mathB = pair[1];
     quizAnswer = mathA + mathB;
-    const opts = new Set([quizAnswer]);
-    while (opts.size < 2) {
-        opts.add(Math.floor(Math.random() * addMax) + 1);
-    }
-    quizOptions = shuffle(Array.from(opts));
+    quizOptions = shuffle([quizAnswer].concat(addDistractors(quizAnswer, addMax, addChoices - 1)));
     mode = 'PLAY';
     render();
     queuePrompt('addition', NUMBER_WORDS[mathA] + ' plus ' + NUMBER_WORDS[mathB], { rate: 0.88 }, 280);
@@ -1206,7 +1245,7 @@ function renderAddition() {
     };
     screen.appendChild(stage);
 
-    const row = el('div', 'big-actions row');
+    const row = el('div', 'big-actions' + (quizOptions.length > 2 ? ' choices' : ' row'));
     quizOptions.forEach(function (opt) {
         const btn = el('button', 'big-btn letter-choice numeral', String(opt));
         btn.type = 'button';
