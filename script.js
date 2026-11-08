@@ -693,6 +693,7 @@ function settingsCard(withAddMax, levelKey, withHear) {
 
 function goHome() {
     stopSound();
+    cancelFeedback();
     coolingDown = false;
     mode = 'PLAY';
     savedScreen = 'home';
@@ -703,6 +704,7 @@ function goHome() {
 
 function goLettersMenu() {
     stopSound();
+    cancelFeedback();
     coolingDown = false;
     mode = 'PLAY';
     savedScreen = 'letters-menu';
@@ -713,6 +715,7 @@ function goLettersMenu() {
 
 function goNumbersMenu() {
     stopSound();
+    cancelFeedback();
     coolingDown = false;
     mode = 'PLAY';
     savedScreen = 'numbers-menu';
@@ -739,6 +742,7 @@ function showGameStart(trackId, title, begin, back, withAddMax, levelKey) {
     startLevelKey = levelKey || '';
     startWithHear = trackId === 'hear';
     stopSound();
+    cancelFeedback();
     coolingDown = false;
     render();
 }
@@ -836,14 +840,14 @@ function renderNumbersMenu() {
         showGameStart('counting', 'Counting', startCounting, goNumbersMenu, false);
     };
 
-    const addition = el('button', 'big-btn secondary home-choice');
+    const addition = el('button', 'big-btn primary home-choice');
     addition.type = 'button';
     addition.innerHTML = '<span class="home-icon">+</span><span>Adding</span>' + levelHtml(3);
     addition.onclick = function () {
         showGameStart('addition', 'Adding', startAddition, goNumbersMenu, true);
     };
 
-    const compare = el('button', 'big-btn secondary home-choice');
+    const compare = el('button', 'big-btn primary home-choice');
     compare.type = 'button';
     compare.innerHTML = '<span class="home-icon">◇</span><span>Which bigger?</span>' + levelHtml(2);
     compare.onclick = function () {
@@ -1378,14 +1382,19 @@ function renderCompare() {
         return renderNumDone(screen, 'Which bigger?', startCompare);
     }
 
-    const stage = el('div', 'letter-stage compare-stage');
+    const stage = el('button', 'letter-stage compare-stage');
+    stage.type = 'button';
+    stage.onclick = function () {
+        if (coolingDown) return;
+        speak('which is bigger?', { rate: 0.95 });
+    };
     stage.innerHTML =
         '<div class="compare-row">' +
         '<div class="compare-side">' + dotsHtml(compareLeft) + '</div>' +
         '<div class="compare-vs">or</div>' +
         '<div class="compare-side">' + dotsHtml(compareRight) + '</div>' +
         '</div>' +
-        '<span class="hint">Which is bigger?</span>';
+        '<span class="hint">Which is bigger? Tap to hear</span>';
     screen.appendChild(stage);
 
     const row = el('div', 'big-actions row');
@@ -1467,10 +1476,7 @@ function nextHearRound(deferSound, upcoming) {
 function renderHear() {
     const screen = el('div', 'simple-screen' + (mode === 'DONE' ? '' : ' play-screen'));
     if (mode === 'DONE') {
-        return renderNumDone(screen, 'Hear a number', function () {
-            unlockAudio();
-            startHear();
-        });
+        return renderNumDone(screen, 'Hear a number', startHear);
     }
     var n = quizAnswer;
     var prompt = el('button', 'letter-stage pulse');
@@ -1541,12 +1547,12 @@ function renderNumDone(screen, title, againFn) {
     screen.appendChild(settingsCard(title === 'Adding', '', title === 'Hear a number'));
     const again = el('button', 'big-btn primary', 'Again');
     again.type = 'button';
-    again.onclick = againFn;
+    again.onclick = function () {
+        unlockAudio();
+        againFn();
+    };
     screen.appendChild(again);
-    const back = el('button', 'big-btn secondary', 'Numbers');
-    back.type = 'button';
-    back.onclick = goNumbersMenu;
-    screen.appendChild(back);
+    screen.appendChild(homeLink('Back', goNumbersMenu));
     app.appendChild(screen);
 }
 
@@ -1600,19 +1606,33 @@ function fillProgress(done) {
 // The same Yes card for every game. It stays 700ms, then the next question.
 var YES_MS = 700;
 
+// Bumped when a menu opens, so a Yes or Try again timer from the last game
+// cannot hide a new screen's state or start another question.
+var feedbackSeq = 0;
+
+function cancelFeedback() {
+    feedbackSeq++;
+    yesOverlay.classList.add('hidden');
+    noOverlay.classList.add('hidden');
+}
+
 function flashYes(nextFn) {
+    var seq = feedbackSeq;
     coolingDown = true;
     yesOverlay.classList.remove('hidden');
     setTimeout(function () {
+        if (seq !== feedbackSeq) return;
         yesOverlay.classList.add('hidden');
         coolingDown = false;
         afterPaint(function () {
+            if (seq !== feedbackSeq) return;
             if (nextFn) nextFn();
         });
     }, YES_MS);
 }
 
 function wrongCooldown(after) {
+    var seq = feedbackSeq;
     stopSound();
     playNo();
     coolingDown = true;
@@ -1630,6 +1650,7 @@ function wrongCooldown(after) {
         });
     });
     setTimeout(function () {
+        if (seq !== feedbackSeq) return;
         coolingDown = false;
         noOverlay.classList.add('hidden');
         app.querySelectorAll('.big-btn').forEach(function (b) {
