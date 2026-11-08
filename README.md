@@ -21,3 +21,5 @@ Choose how many questions to play. The last menu is remembered on this device.
 
 Letter sounds from [Buzzphonics](https://github.com/hellodeborahuk/buzzphonics) (MIT).
 Spoken numbers are synthetic, made with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0). See vendor-credits.
+
+Tests: `npm ci` then `npm test`.
